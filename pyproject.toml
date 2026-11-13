@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "core-lib"
+version = "0.1.0"
+description = "Shared support library"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core_lib*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["core_lib"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

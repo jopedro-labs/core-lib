@@ -1,0 +1,1 @@
+from core_lib.file_utils.file_utils import load_file_content as load_file_content
