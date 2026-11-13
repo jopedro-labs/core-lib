@@ -18,14 +18,19 @@ Shared Python support library. Provides common utilities (logging, file I/O) for
 Add to your project's `requirements.txt` or `pyproject.toml`:
 
 ```txt
-# requirements.txt
+# requirements.txt — core utilities only
 core-lib @ git+https://github.com/jopedro-labs/core-lib.git
+
+# with Google Drive support
+"core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git"
 ```
 
 ```toml
 # pyproject.toml
 dependencies = [
     "core-lib @ git+https://github.com/jopedro-labs/core-lib.git",
+    # or with Google Drive support:
+    # "core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git",
 ]
 ```
 
@@ -71,6 +76,41 @@ Safe file reading utilities. Always returns a string — never raises.
 from core_lib.file_utils import load_file_content
 
 content = load_file_content("/path/to/file.txt")  # "" if missing or unreadable
+```
+
+---
+
+### `core_lib.gdrive`
+
+Google Drive client using OAuth2. Requires the `[gdrive]` extra.
+
+**Environment variables (optional — can be overridden per instance):**
+
+| Variable | Default | Description |
+|---|---|---|
+| `GDRIVE_CREDENTIALS_PATH` | `credentials.json` | Path to the OAuth2 credentials file |
+| `GDRIVE_TOKEN_PATH` | `token.json` | Path to the token file |
+| `GDRIVE_DATA_FOLDER_ID` | `None` | Default target folder ID |
+
+```python
+from core_lib.gdrive import GDriveService, sanitize_gdrive_folder_id
+
+# uses env vars or defaults
+drive = GDriveService()
+
+# or inject explicitly
+drive = GDriveService(
+    credentials_path="/secrets/credentials.json",
+    token_path="/secrets/token.json",
+    folder_id="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs",
+)
+
+drive.verify_folder_access()
+drive.upload_file("report.csv", overwrite=True)
+drive.download_file("report.csv", destination_path="/tmp/report.csv")
+drive.list_files()
+drive.backup_file("data.db")
+drive.sync_files(["a.csv", "b.csv"], direction="push")
 ```
 
 ---
