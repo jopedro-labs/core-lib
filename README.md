@@ -90,7 +90,7 @@ cd core-lib
 make install
 ```
 
-Run all checks (lint, types, tests):
+Run all checks (lint, types, tests): 
 
 ```bash
 make check
