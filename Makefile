@@ -1,7 +1,7 @@
 .PHONY: install check lint lint-fix type test
 
 install:
-	pip install -e ".[gdrive,dev]"
+	python3 -m pip install -e ".[gdrive,dev]"
 
 lint:
 	python3 -m ruff check core_lib
