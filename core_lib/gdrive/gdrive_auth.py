@@ -34,11 +34,13 @@ def get_google_service_credentials(
     """
     creds_path = Path(
         credentials_path
-        or os.getenv("GDRIVE_CREDENTIALS_PATH", _DEFAULT_CREDENTIALS_PATH)
+        or os.getenv("GDRIVE_CREDENTIALS_PATH")
+        or _DEFAULT_CREDENTIALS_PATH
     )
     tok_path = Path(
         token_path
-        or os.getenv("GDRIVE_TOKEN_PATH", _DEFAULT_TOKEN_PATH)
+        or os.getenv("GDRIVE_TOKEN_PATH")
+        or _DEFAULT_TOKEN_PATH
     )
 
     creds: Credentials | None = None

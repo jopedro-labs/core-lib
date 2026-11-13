@@ -34,5 +34,17 @@ python_version = "3.10"
 strict = true
 files = ["core_lib"]
 
+[[tool.mypy.overrides]]
+module = [
+    "google.*",
+    "google_auth_oauthlib.*",
+    "googleapiclient.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["core_lib.gdrive.*"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
