@@ -16,3 +16,9 @@ test:
 	python3 -m pytest --tb=short
 
 check: lint type test
+
+run-gdrive-bot:
+	act workflow_dispatch \
+    	-W .github/workflows/gdrive_bot.yml \
+    	--secret-file .env \
+    	--verbose

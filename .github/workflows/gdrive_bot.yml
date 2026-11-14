@@ -32,10 +32,7 @@ jobs:
       - name: Install dependencies & core-lib with gdrive extra
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[gdrive,dev]
-
-      - name: Run unit tests
-        run: pytest tests/test_gdrive_update_bot.py -v
+          pip install -e .[gdrive,discord,dev]
 
       - name: Run GDrive Update Bot
         id: check
@@ -104,18 +101,58 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Switch to (or create) the orphan bot-state branch locally
+          STATE_FILE=".github/api-revisions/gdrive-revision.json"
+          TMP_STATE=$(mktemp)
+          cp "$STATE_FILE" "$TMP_STATE"
+
           git fetch origin bot-state 2>/dev/null && \
             git checkout -b bot-state origin/bot-state || \
             git checkout --orphan bot-state
 
-          # Bring only the state file; discard everything else from the working tree
           git rm -rf . --quiet || true
           mkdir -p .github/api-revisions
-          git checkout "$GITHUB_SHA" -- .github/api-revisions/gdrive-revision.json
+          cp "$TMP_STATE" "$STATE_FILE"
 
-          git add .github/api-revisions/gdrive-revision.json
+          git add "$STATE_FILE"
           git diff --cached --quiet && exit 0
 
           git commit -m "chore(monitor): update Google Drive API revision state [skip ci]"
-          git push origin bot-state
+
+          if [ "${ACT}" == "true" ]; then
+            echo "Running locally via act - skipping git push."
+          else
+            git push origin bot-state
+          fi
+
+      - name: Send Discord Notification
+        if: always()
+        env:
+          CORE_LIB_DISCORD_WEBHOOK: ${{ secrets.CORE_LIB_DISCORD_WEBHOOK }}
+          CHECK_RESULT: ${{ steps.check.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$CORE_LIB_DISCORD_WEBHOOK" ]; then
+            echo "CORE_LIB_DISCORD_WEBHOOK not set, skipping."
+            exit 0
+          fi
+
+          if [ "$CHECK_RESULT" = "ok" ]; then
+            MSG="✅ **Google Drive API Monitor**: No changes detected."
+          elif [ "$CHECK_RESULT" = "revision_changed" ]; then
+            MSG="📋 **Google Drive API Monitor**: API revision changed!"
+          else
+            MSG="🚨 **Google Drive API Monitor**: Failed (result=${CHECK_RESULT})."
+          fi
+
+          PAYLOAD=$(printf '{"content":"%s"}' "$MSG")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$CORE_LIB_DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Discord notification sent (HTTP $HTTP_STATUS)."
+          else
+            echo "Discord notification failed (HTTP $HTTP_STATUS)."
+            exit 1
+          fi
