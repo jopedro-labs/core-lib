@@ -16,6 +16,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Restore revision state from bot-state branch
+        run: |
+          mkdir -p .github/api-revisions
+          git fetch origin bot-state 2>/dev/null || true
+          git show origin/bot-state:.github/api-revisions/gdrive-revision.json \
+            > .github/api-revisions/gdrive-revision.json 2>/dev/null || true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -91,10 +98,24 @@ jobs:
               });
             }
 
-      - name: Commit updated revision state
+      - name: Commit updated revision state to bot-state branch
         if: steps.check.outputs.result == 'ok' || steps.check.outputs.result == 'revision_changed'
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(monitor): update Google Drive API revision state [skip ci]"
-          file_pattern: ".github/api-revisions/*.json"
-          push_options: '--force'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Switch to (or create) the orphan bot-state branch locally
+          git fetch origin bot-state 2>/dev/null && \
+            git checkout -b bot-state origin/bot-state || \
+            git checkout --orphan bot-state
+
+          # Bring only the state file; discard everything else from the working tree
+          git rm -rf . --quiet || true
+          mkdir -p .github/api-revisions
+          git checkout "$GITHUB_SHA" -- .github/api-revisions/gdrive-revision.json
+
+          git add .github/api-revisions/gdrive-revision.json
+          git diff --cached --quiet && exit 0
+
+          git commit -m "chore(monitor): update Google Drive API revision state [skip ci]"
+          git push origin bot-state
