@@ -100,46 +100,39 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # Save the updated state file and clean the working tree
+
           STATE_FILE=".github/api-revisions/gdrive-revision.json"
           TMP_STATE=$(mktemp)
           cp "$STATE_FILE" "$TMP_STATE"
-          rm -f "$STATE_FILE"
-          
-          # Switch to (or create) the bot-state branch cleanly
-          if git fetch origin bot-state 2>/dev/null; then
-            git checkout -B bot-state origin/bot-state
-          else
+
+          git fetch origin bot-state 2>/dev/null && \
+            git checkout -b bot-state origin/bot-state || \
             git checkout --orphan bot-state
-          fi
-            
-          # Restore the state file
+
+          git rm -rf . --quiet || true
           mkdir -p .github/api-revisions
           cp "$TMP_STATE" "$STATE_FILE"
-            
+
           git add "$STATE_FILE"
           git diff --cached --quiet && exit 0
-            
+
           git commit -m "chore(monitor): update Google Drive API revision state [skip ci]"
-            
-          # Skip push when running locally via act
-          if [ "${{ env.ACT }}" == "true" ]; then
-            echo "⚠️ Running locally via act - skipping git push."
+
+          if [ "${ACT}" == "true" ]; then
+            echo "Running locally via act - skipping git push."
           else
-            git pull origin bot-state --rebase || true
             git push origin bot-state
           fi
 
       - name: Send Discord Notification
         if: always()
         env:
-          CORE_LIB_DISCORD_WEBHOOK: ${{ secrets.CORE_LIB_DISCORD_WEBHOOK }}
+          INFRA_ALERTS_DISCORD_WEBHOOK: ${{ secrets.INFRA_ALERTS_DISCORD_WEBHOOK }}
           CHECK_RESULT: ${{ steps.check.outputs.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if [ -z "$CORE_LIB_DISCORD_WEBHOOK" ]; then
-            echo "CORE_LIB_DISCORD_WEBHOOK not set, skipping."
+          if [ -z "$INFRA_ALERTS_DISCORD_WEBHOOK" ]; then
+            echo "INFRA_ALERTS_DISCORD_WEBHOOK not set, skipping."
             exit 0
           fi
 
@@ -153,7 +146,7 @@ jobs:
 
           PAYLOAD=$(printf '{"content":"%s"}' "$MSG")
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "$CORE_LIB_DISCORD_WEBHOOK" \
+            -X POST "$INFRA_ALERTS_DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
