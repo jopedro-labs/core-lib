@@ -1,0 +1,77 @@
+name: Monitor Google Drive API
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run tests
+        run: pytest tests/test_gdrive_api_monitor.py -v
+
+      - name: Run GDrive API Revision Check
+        id: check
+        run: python scripts/check_gdrive_api.py
+        continue-on-error: true
+
+      - name: Open issue — revision changed
+        if: steps.check.outputs.result == 'revision_changed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📋 Google Drive API revision changed',
+              body: [
+                'The automated monitor detected a **revision change** in the Google Drive API v3 discovery document.',
+                '',
+                'Please review the [API changelog](https://developers.google.com/drive/api/guides/v3-revisions) and verify compatibility with `core_lib.gdrive`.',
+                '',
+                'Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              ].join('\n'),
+              labels: ['api-monitor', 'needs-review'],
+            });
+
+      - name: Open issue — network or parse failure
+        if: steps.check.outputs.result == 'error'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Google Drive API monitor failed (network/parse error)',
+              body: [
+                'The automated Google Drive API monitor failed due to a **network or parse error**.',
+                '',
+                'Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              ].join('\n'),
+              labels: ['api-monitor', 'bug'],
+            });
+
+      - name: Commit updated revision state
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(monitor): update Google Drive API revision state [skip ci]"
+          file_pattern: ".github/api-revisions/*.json"
+          push_options: '--force-with-lease'
