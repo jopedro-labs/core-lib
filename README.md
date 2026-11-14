@@ -24,6 +24,9 @@ core-lib @ git+https://github.com/jopedro-labs/core-lib.git
 
 # with Google Drive support
 core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git
+
+# with Discord support
+core-lib[discord] @ git+https://github.com/jopedro-labs/core-lib.git
 ```
 
 ```toml
@@ -32,6 +35,8 @@ dependencies = [
     "core-lib @ git+https://github.com/jopedro-labs/core-lib.git",
     # or with Google Drive support:
     # "core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git",
+    # or with Discord support:
+    # "core-lib[discord] @ git+https://github.com/jopedro-labs/core-lib.git",
 ]
 ```
 
@@ -124,6 +129,46 @@ drive.list_files()
 drive.backup_file("data.db")
 drive.sync_files(["a.csv", "b.csv"], direction="push")
 ```
+
+---
+
+### `core_lib.discord`
+
+Discord notification client supporting both Bot API (with dynamic channel targeting) and Webhook URLs. Requires the `[discord]` extra.
+
+**Features:**
+* **Dynamic Channel Targeting:** Send messages or embeds to specific channels dynamically using a Discord Bot Token (`channel_id` argument)
+* **Webhook Fallback:** Support for traditional fixed-channel Webhook URLs
+* **Rate-Limit Awareness:** Explicit handling of HTTP 429 responses with `retry_after` extraction
+* **Context Manager Support:** Clean resource management using `with` statements
+
+```python
+from core_lib.discord import DiscordNotifier, DiscordNotificationError
+
+# Using a Bot Token for dynamic channel targeting
+try:
+    with DiscordNotifier(bot_token="YOUR_BOT_TOKEN") as notifier:
+        notifier.send_message(
+            content="🚨 **Alert**: Automated job completed successfully.",
+            channel_id="123456789012345678"
+        )
+except DiscordNotificationError as e:
+    print(f"Failed to notify: {e}")
+
+# Using a traditional Webhook URL
+notifier = DiscordNotifier(webhook_url="[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)...")
+notifier.send_message(content="Hello from core-lib!")
+notifier.close()
+```
+
+---
+
+## Requirements
+
+- Python >= 3.10
+- Core utilities (logging, file I/O): No external dependencies.
+- Google Drive extra (`[gdrive]`): Requires Google API client libraries (`google-api-python-client`, `google-auth`, `google-auth-oauthlib`).
+- Discord extra (`[discord]`): Requires `requests`.
 
 ---
 
