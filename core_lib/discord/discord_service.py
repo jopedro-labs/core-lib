@@ -66,57 +66,62 @@ class DiscordNotifier:
 
     def send_message(
         self,
-        content: str,
+        content: str | None = None,
         channel_id: str | None = None,
         embeds: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Sends a text message or embed to a Discord channel.
+        """Send a text message or rich embeds to Discord via Bot API or Webhook.
 
         Args:
-            content: The message text content.
-            channel_id: Target Discord channel ID (required when using bot_token).
-            embeds: Optional list of rich embed objects.
+            content: The text content of the message.
+            channel_id: Optional target channel ID (required for Bot token mode).
+            embeds: Optional list of rich embed dictionaries.
 
         Raises:
-            ValueError: If bot_token is set but channel_id is missing.
-            DiscordNotificationError: If the API request fails or returns an error.
+            ValueError: If neither content nor embeds are provided, or if channel_id
+                        is missing when using a bot token.
+            DiscordNotificationError: If the API request fails or is rate-limited.
         """
         if not content and not embeds:
-            raise ValueError("[discord] 'content' or at least one embed is required.")
+            raise ValueError("Either 'content' or at least one embed is required.")
 
-        payload: dict[str, Any] = {"content": content}
+        if self.bot_token and not channel_id:
+            raise ValueError("'channel_id' is required when using a bot token.")
+
+        payload: dict[str, Any] = {}
+        if content:
+            payload["content"] = content
         if embeds:
             payload["embeds"] = embeds
 
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-
         if self.bot_token:
-            if not channel_id:
-                raise ValueError(
-                    "[discord] 'channel_id' is required when using a bot token."
-                )
-            url: str = f"{self.API_BASE_URL}/channels/{channel_id}/messages"
-            headers["Authorization"] = f"Bot {self.bot_token}"
+            url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bot {self.bot_token}",
+            }
         else:
-            url = self.webhook_url  # type: ignore[assignment]
+            url = str(self.webhook_url)
+            headers = {"Content-Type": "application/json"}
 
         try:
-            response: requests.Response = self.session.post(
-                url, json=payload, headers=headers, timeout=self.timeout
-            )
+            response = self.session.post(url, json=payload, headers=headers, timeout=self.timeout)
+
             if response.status_code == 429:
-                retry_after = response.json().get("retry_after", "unknown")
+                data = response.json() if response.content else {}
+                retry_after = data.get("retry_after", "unknown")
                 raise DiscordNotificationError(
-                    f"[discord] Rate limited by Discord API. retry_after={retry_after}s"
+                    f"Rate limited by Discord API. retry_after={retry_after}s"
                 )
+
             if response.status_code not in (200, 201, 204):
                 raise DiscordNotificationError(
-                    f"[discord] HTTP {response.status_code} from Discord API: {response.text}"
+                    f"HTTP {response.status_code} from Discord API: {response.text}"
                 )
-        except requests.RequestException as e:
-            logger.exception("[discord] Failed to send notification.")
+
+        except requests.exceptions.RequestException as e:
             raise DiscordNotificationError(
-                f"[discord] Network error while sending Discord notification: {e}"
+                f"Network error while sending Discord notification: {e}"
             ) from e
 
     def close(self) -> None:
