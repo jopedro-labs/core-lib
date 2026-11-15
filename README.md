@@ -18,31 +18,20 @@ Shared Python support library. Provides common utilities (logging, file I/O), se
 
 ## Installation
 
-Add to your project's `requirements.txt` or `pyproject.toml`:
+Install directly from PyPI:
 
-```txt
-# requirements.txt — core utilities only
-core-lib @ git+https://github.com/jopedro-labs/core-lib.git
+```bash
+# Core utilities only
+pip install core-lib
 
-# with Google Drive support
-core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git
+# With Google Drive support
+pip install core-lib[gdrive]
 
-# with Discord support
-core-lib[discord] @ git+https://github.com/jopedro-labs/core-lib.git
+# With Discord support
+pip install core-lib[discord]
 ```
 
-```toml
-# pyproject.toml
-dependencies = [
-    "core-lib @ git+https://github.com/jopedro-labs/core-lib.git",
-    # or with Google Drive support:
-    # "core-lib[gdrive] @ git+https://github.com/jopedro-labs/core-lib.git",
-    # or with Discord support:
-    # "core-lib[discord] @ git+https://github.com/jopedro-labs/core-lib.git",
-]
-```
-
-Pin to a specific version:
+Or add to your project's `requirements.txt` / `pyproject.toml` via Git reference:
 
 ```text
 core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.0
@@ -100,7 +89,7 @@ Google Drive client using OAuth2 and the **Google Drive API v3**. Requires the `
 
 **Automated API Monitoring (GDrive Update Bot):**
 * **Schedule:** Runs automatically every Thursday at 08:00 UTC (and supports manual workflow dispatch).
-* * **Mechanism:** Queries Google's public Discovery Service using standard libraries (`scripts/gdrive_update_bot.py`) with built-in retry logic and linear backoff.
+* **Mechanism:** Queries Google's public Discovery Service using standard libraries (`scripts/gdrive_update_bot.py`) with built-in retry logic and linear backoff.
 * **Resilience & Alerts:** Persists revision states locally (`.github/api-revisions/gdrive-revision.json`), committing updates on success and opening targeted GitHub Issues if a breaking API revision change or network failure occurs. Can also be run manually: `python scripts/gdrive_update_bot.py`.
 
 **Environment variables (optional — can be overridden per instance):**
