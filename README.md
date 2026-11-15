@@ -18,20 +18,7 @@ Shared Python support library. Provides common utilities (logging, file I/O), se
 
 ## Installation
 
-Install directly from PyPI:
-
-```bash
-# Core utilities only
-pip install core-lib
-
-# With Google Drive support
-pip install core-lib[gdrive]
-
-# With Discord support
-pip install core-lib[discord]
-```
-
-Or add to your project's `requirements.txt` / `pyproject.toml` via Git reference:
+Add to your project's `requirements.txt` / `pyproject.toml` via Git reference:
 
 ```text
 core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.0
