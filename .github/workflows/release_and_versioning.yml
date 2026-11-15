@@ -1,0 +1,64 @@
+name: Release & Version Tagging (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      custom_version:
+        description: "Custom version to release (leave blank to read from pyproject.toml)"
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Determine package version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.custom_version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+            echo "Using manual input version: $VERSION"
+          else
+            # Lê a versão diretamente do pyproject.toml
+            VERSION=$(grep -m 1 '^version' pyproject.toml | cut -d'"' -f2)
+            if [ -z "$VERSION" ]; then
+              VERSION="0.1.0"
+            fi
+            echo "Extracted version from pyproject.toml: $VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag & GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_VERSION: v${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse "$TAG_VERSION" >/dev/null 2>&1; then
+            echo "Tag $TAG_VERSION already exists. Skipping release creation."
+          else
+            git tag "$TAG_VERSION"
+            git push origin "$TAG_VERSION"
+            
+            gh release create "$TAG_VERSION" \
+              --title "Release $TAG_VERSION (Beta)" \
+              --notes "Manual GitHub release for core-lib version ${{ steps.version.outputs.version }}." \
+              --prerelease
+          fi

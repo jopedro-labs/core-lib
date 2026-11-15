@@ -99,8 +99,8 @@ Google Drive client using OAuth2 and the **Google Drive API v3**. Requires the `
 * **Scopes:** `https://www.googleapis.com/auth/drive.file`
 
 **Automated API Monitoring (GDrive Update Bot):**
-* **Schedule:** Runs automatically every Monday at 08:00 UTC (and supports manual workflow dispatch).
-* **Mechanism:** Queries Google's public Discovery Service using standard libraries (`scripts/gdrive_update_bot.py`) with built-in retry logic and linear backoff.
+* **Schedule:** Runs automatically every Thursday at 08:00 UTC (and supports manual workflow dispatch).
+* * **Mechanism:** Queries Google's public Discovery Service using standard libraries (`scripts/gdrive_update_bot.py`) with built-in retry logic and linear backoff.
 * **Resilience & Alerts:** Persists revision states locally (`.github/api-revisions/gdrive-revision.json`), committing updates on success and opening targeted GitHub Issues if a breaking API revision change or network failure occurs. Can also be run manually: `python scripts/gdrive_update_bot.py`.
 
 **Environment variables (optional — can be overridden per instance):**

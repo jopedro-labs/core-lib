@@ -60,3 +60,24 @@ def test_print_outputs_message(capsys):
 
 def test_logger_singleton_is_logger_instance():
     assert isinstance(logger, Logger)
+
+
+def test_logger_respects_tty_colors(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    tty_logger = Logger()
+    assert tty_logger._colors_enabled is True
+
+    tty_logger.success("Color test")
+    out = capsys.readouterr().out
+    assert "\033[92m" in out
+
+
+def test_logger_strips_colors_in_non_tty(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    headless_logger = Logger()
+    assert headless_logger._colors_enabled is False
+
+    headless_logger.success("Clean test")
+    out = capsys.readouterr().out
+    assert "\033[92m" not in out
+    assert "[SUCCESS" in out
