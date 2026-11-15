@@ -7,10 +7,12 @@
 <br />
 ![Linter](https://img.shields.io/badge/linter-Ruff-000000?style=flat-square&logo=python&logoColor=white)
 ![Type Check](https://img.shields.io/badge/types-mypy%20strict-2A6DB2?style=flat-square&logo=python&logoColor=white)
+![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white)
+![Gemini AI](https://img.shields.io/badge/Gemini_AI-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)
 ![GNU Make](https://img.shields.io/badge/env-GNU%20Make-active?style=flat-square&logo=gnu-make&logoColor=white)
 ![MIT License](https://img.shields.io/badge/license-MIT-607D8B?style=flat-square)
 
-Shared Python support library. Provides common utilities (logging, file I/O) and service integrations for internal projects.
+Shared Python support library. Provides common utilities (logging, file I/O), service integrations, and autonomous code quality evaluation tools for internal projects.
 
 ---
 
@@ -42,13 +44,13 @@ dependencies = [
 
 Pin to a specific version:
 
-```txt
+```text
 core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.0
 ```
 
 ---
 
-## Modules
+## Modules & Tools
 
 ### `core_lib.logger`
 
@@ -156,10 +158,30 @@ except DiscordNotificationError as e:
     print(f"Failed to notify: {e}")
 
 # Using a traditional Webhook URL
-notifier = DiscordNotifier(webhook_url="[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)...")
+notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/...")
 notifier.send_message(content="Hello from core-lib!")
 notifier.close()
 ```
+
+---
+
+### Autonomous Quality Assurance & Test Gap Evaluation Agent
+
+An internal developer utility (`scripts/quality_eval_agent.py`) powered by Gemini AI that acts as an autonomous quality assurance auditor within the repository.
+
+**Core Validation Pillars Evaluated:**
+1. **Unit Tests:** Isolated verification and mocking via `pytest`.
+2. **Integration Tests:** Component and adapter interaction verification.
+3. **Static Code Analysis:** Type safety (`mypy`) and linting (`ruff`).
+4. **Mutation Testing Readiness:** Assessment of test suite robustness against code changes.
+5. **Black-Box Verification:** Functional and behavioral validation.
+
+**Execution:**
+```bash
+make quality-eval-agent
+```
+
+The agent automatically executes the test suite with coverage, gathers repository context, analyzes coverage gaps and validation metrics via the configured Gemini model (`GEMINI_MODEL`), and generates a structured markdown report under `reports/validation_gap_report.md`.
 
 ---
 
@@ -169,7 +191,7 @@ notifier.close()
 - Core utilities (logging, file I/O): No external dependencies.
 - Google Drive extra (`[gdrive]`): Requires Google API client libraries (`google-api-python-client`, `google-auth`, `google-auth-oauthlib`).
 - Discord extra (`[discord]`): Requires `requests`.
-
+- Quality Evaluation Agent: Requires `google-generativeai` (or `google.genai`), `python-dotenv`, and an active `GEMINI_API_KEY`.
 ---
 
 ## Development
@@ -188,12 +210,13 @@ make check
 
 Individual commands:
 
-| Command       | Description                    |
-|---------------|--------------------------------|
-| `make lint`   | Lint with ruff                 |
-| `make type`   | Type check with mypy           |
-| `make test`   | Run tests with pytest          |
-| `make check`  | Run all three in sequence      |
+| Command                   | Description                              |
+|---------------------------|------------------------------------------|
+| `make lint`               | Lint with ruff                           |
+| `make type`               | Type check with mypy                     |
+| `make test`               | Run tests with pytest                    |
+| `make quality-eval-agent` | Run AI quality audit & test gap analysis |
+| `make check`              | Run all three in sequence                |
 
 ---
 
