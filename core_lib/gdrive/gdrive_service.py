@@ -260,16 +260,17 @@ class GDriveService:
                 return None
 
             latest_file = files[0]
-            logger.info(
-                f"[gdrive] Found latest remote file: '{latest_file['name']}' (modified: {latest_file.get('modifiedTime')})"
-            )
-            return latest_file["id"]
+            file_name = latest_file["name"]
+            mod_time = latest_file.get("modifiedTime")
+            logger.info(f"[gdrive] Found latest remote file: '{file_name}' (modified: {mod_time})")
+            return str(latest_file["id"])
         except Exception as e:
             logger.error(f"[gdrive] Error finding latest file with prefix '{prefix}': {e}")
             return None
 
     def download_latest_file(self, destination_path: str | Path, prefix: str = "finances") -> bool:
-        """Downloads the most recent file matching a given prefix directly to a local destination path.
+        """Downloads the most recent file matching a given prefix
+        directly to a local destination path.
 
         Args:
             destination_path: Local filesystem path where the file should be saved.
