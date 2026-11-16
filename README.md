@@ -106,6 +106,8 @@ drive.download_file("report.csv", destination_path="/tmp/report.csv")
 drive.list_files()
 drive.backup_file("data.db")
 drive.sync_files(["a.csv", "b.csv"], direction="push")
+drive.get_latest_file_id(prefix="finances")
+drive.download_latest_file(destination_path="finances.db", prefix="finances")
 ```
 
 ---
