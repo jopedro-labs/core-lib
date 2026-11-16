@@ -220,3 +220,87 @@ class GDriveService:
                 logger.error(f"[gdrive] Sync error for {path.name}: {e}")
                 results[path.name] = False
         return results
+
+    def get_latest_file_id(
+        self, prefix: str = "finances", folder_id: str | None = None
+    ) -> str | None:
+        """Finds the ID of the most recent file in Google Drive matching the given prefix.
+
+        Args:
+            prefix: String prefix to filter filenames. Defaults to "finances".
+            folder_id: Optional specific folder ID to search within. Defaults to instance folder_id.
+
+        Returns:
+            The file ID string of the latest matching file, or None if not found.
+        """
+        service = self._get_service()
+        if not service:
+            return None
+
+        target_folder = folder_id or self.folder_id
+        query = f"name contains '{prefix}' and trashed = false"
+        if target_folder:
+            query += f" and '{target_folder}' in parents"
+
+        try:
+            response = (
+                service.files()
+                .list(
+                    q=query,
+                    pageSize=10,
+                    orderBy="modifiedTime desc",
+                    fields="files(id, name, modifiedTime)",
+                )
+                .execute()
+            )
+
+            files = response.get("files", [])
+            if not files:
+                logger.warning(f"[gdrive] No files found matching prefix '{prefix}'.")
+                return None
+
+            latest_file = files[0]
+            file_name = latest_file["name"]
+            mod_time = latest_file.get("modifiedTime")
+            logger.info(f"[gdrive] Found latest remote file: '{file_name}' (modified: {mod_time})")
+            return str(latest_file["id"])
+        except Exception as e:
+            logger.error(f"[gdrive] Error finding latest file with prefix '{prefix}': {e}")
+            return None
+
+    def download_latest_file(self, destination_path: str | Path, prefix: str = "finances") -> bool:
+        """Downloads the most recent file matching a given prefix
+        directly to a local destination path.
+
+        Args:
+            destination_path: Local filesystem path where the file should be saved.
+            prefix: String prefix used to locate the latest remote file. Defaults to "finances".
+
+        Returns:
+            True if the download succeeded, False otherwise.
+        """
+        dest = Path(destination_path)
+        file_id = self.get_latest_file_id(prefix=prefix)
+        if not file_id:
+            return False
+
+        service = self._get_service()
+        if not service:
+            return False
+
+        try:
+            request = service.files().get_media(fileId=file_id)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            with io.BytesIO() as fh:
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                dest.write_bytes(fh.getvalue())
+
+            logger.success(f"[gdrive] Successfully downloaded latest remote file to '{dest}'.")
+            return True
+        except Exception as e:
+            logger.error(f"[gdrive] Failed to download latest file ID '{file_id}': {e}")
+            return False
