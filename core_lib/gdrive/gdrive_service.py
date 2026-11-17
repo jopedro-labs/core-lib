@@ -324,7 +324,8 @@ class GDriveService:
             files = response.get("files", [])
             if not files:
                 return None
-            return files[0].get("modifiedTime")
+            mod_time: Any = files[0].get("modifiedTime")
+            return str(mod_time) if mod_time is not None else None
         except Exception as e:
             logger.error(f"[gdrive] Error getting modification time for '{file_name}': {e}")
             return None
