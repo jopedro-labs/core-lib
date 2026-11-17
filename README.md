@@ -81,11 +81,11 @@ Google Drive client using OAuth2 and the **Google Drive API v3**. Requires the `
 
 **Environment variables (optional — can be overridden per instance):**
 
-| Variable | Default | Description |
-|---|---|---|
+| Variable                  | Default            | Description                         |
+|---------------------------|--------------------|-------------------------------------|
 | `GDRIVE_CREDENTIALS_PATH` | `credentials.json` | Path to the OAuth2 credentials file |
-| `GDRIVE_TOKEN_PATH` | `token.json` | Path to the token file |
-| `GDRIVE_DATA_FOLDER_ID` | `None` | Default target folder ID |
+| `GDRIVE_TOKEN_PATH`       | `token.json`       | Path to the token file              |
+| `GDRIVE_DATA_FOLDER_ID`   | `None`             | Default target folder ID            |
 
 ```python
 from core_lib.gdrive import GDriveService, sanitize_gdrive_folder_id
@@ -108,6 +108,7 @@ drive.backup_file("data.db")
 drive.sync_files(["a.csv", "b.csv"], direction="push")
 drive.get_latest_file_id(prefix="finances")
 drive.download_latest_file(destination_path="finances.db", prefix="finances")
+drive.get_file_modified_time("xtb_screenshot.png")
 ```
 
 ---
