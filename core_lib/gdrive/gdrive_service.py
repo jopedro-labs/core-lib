@@ -304,3 +304,28 @@ class GDriveService:
         except Exception as e:
             logger.error(f"[gdrive] Failed to download latest file ID '{file_id}': {e}")
             return False
+
+    def get_file_modified_time(self, file_name: str, folder_id: str | None = None) -> str | None:
+        """Gets the modifiedTime of a specific file by name in Google Drive."""
+        service = self._get_service()
+        if not service:
+            return None
+        target_folder = folder_id or self.folder_id
+        safe_name = file_name.replace("'", "\\'")
+        query = f"name = '{safe_name}' and trashed = false"
+        if target_folder:
+            query += f" and '{target_folder}' in parents"
+        try:
+            response = (
+                service.files()
+                .list(q=query, fields="files(id, name, modifiedTime)", pageSize=1)
+                .execute()
+            )
+            files = response.get("files", [])
+            if not files:
+                return None
+            mod_time: Any = files[0].get("modifiedTime")
+            return str(mod_time) if mod_time is not None else None
+        except Exception as e:
+            logger.error(f"[gdrive] Error getting modification time for '{file_name}': {e}")
+            return None
