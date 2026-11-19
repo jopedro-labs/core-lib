@@ -56,3 +56,26 @@ def test_uses_env_var_for_credentials_path(tmp_path, monkeypatch):
 
     with pytest.raises(FileNotFoundError):
         get_google_service_credentials()
+
+def test_triggers_browser_flow_when_no_token_exists(tmp_path):
+    creds_file = tmp_path / "credentials.json"
+    creds_file.write_text('{"installed": {"client_id": "123"}}')
+    token_file = tmp_path / "token.json"
+
+    mock_creds = MagicMock()
+    mock_creds.valid = True
+    mock_creds.to_json.return_value = "{}"
+
+    with patch("core_lib.gdrive.gdrive_auth.InstalledAppFlow.from_client_secrets_file") as mock_flow_cls:
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.return_value = mock_creds
+        mock_flow_cls.return_value = mock_flow
+
+        res = get_google_service_credentials(
+            credentials_path=creds_file,
+            token_path=token_file,
+        )
+
+        assert res is mock_creds
+        mock_flow.run_local_server.assert_called_once_with(port=0)
+        assert token_file.exists()

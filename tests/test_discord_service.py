@@ -113,3 +113,17 @@ class TestDiscordNotifierSendMessage:
         with patch.object(notifier.session, "post", side_effect=requests.exceptions.ConnectTimeout("Connection timed out")):
             with pytest.raises(DiscordNotificationError, match="Network error while sending Discord notification"):
                 notifier.send_message(content="Timeout")
+def test_send_message_embed_only_payload():
+    """Verifies that sending embeds without message content succeeds."""
+    url = "https://discord.com/api/webhooks/123/xyz"
+    notifier = DiscordNotifier(webhook_url=url)
+    mock_resp = MagicMock(status_code=204)
+
+    with patch.object(notifier.session, "post", return_value=mock_resp) as mock_post:
+        notifier.send_message(embeds=[{"title": "Automated Alert"}])
+        mock_post.assert_called_once_with(
+            url,
+            json={"embeds": [{"title": "Automated Alert"}]},
+            headers={"Content-Type": "application/json"},
+            timeout=10.0,
+        )

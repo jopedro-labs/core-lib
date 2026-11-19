@@ -1,4 +1,5 @@
-# core-lib TODOs
+# TODO — core-lib
 
-* Analyze AI Agent quality report
-* Rever Agent do claude
+## Future Enhancements
+- [ ] Implement typed wrappers for Google API client resources.
+- [ ] Migrate from `unittest.mock` to loopback integration fixtures where possible.
