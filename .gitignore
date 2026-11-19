@@ -1,13 +1,36 @@
+# Python & Bytecode
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 *.pyd
-.venv/
-venv/
+
+# Distribution & Packaging
 dist/
 build/
 *.egg-info/
-.idea/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Configuration & Secrets
+.env
+.env.*
+secrets/
+
+# Testing & Coverage
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Reports
+reports/
+
+# IDEs & System
+.idea/
+.vscode/
 *.DS_Store
+.DS_Store

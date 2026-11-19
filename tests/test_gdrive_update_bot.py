@@ -230,3 +230,21 @@ def test_main_network_error_exits_1(
 
     assert exc_info.value.code == 1
     mock_output.assert_called_with("result", "error")
+@patch("scripts.gdrive_update_bot.time.sleep")
+@patch("scripts.gdrive_update_bot.urllib.request.urlopen")
+def test_fetch_retries_exact_linear_backoff_values(mock_urlopen, mock_sleep):
+    """Ensures backoff mutant (RETRIES_DELAY * attempt) is killed."""
+    from scripts.gdrive_update_bot import RETRIES_DELAY, fetch_discovery_data
+    import unittest.mock
+
+    mock_urlopen.side_effect = TimeoutError("transient timeout")
+
+    with pytest.raises(TimeoutError):
+        fetch_discovery_data()
+
+    # Attempts 1 and 2 sleep before failure 3 raises
+    expected_calls = [
+        unittest.mock.call(RETRIES_DELAY * 1),
+        unittest.mock.call(RETRIES_DELAY * 2),
+    ]
+    assert mock_sleep.call_args_list == expected_calls

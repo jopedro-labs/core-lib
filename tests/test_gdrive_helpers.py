@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock, patch
 import pytest
 
 from core_lib.gdrive.gdrive_helpers import sanitize_gdrive_folder_id, verify_gdrive_folder_access
@@ -30,3 +31,10 @@ def test_verify_gdrive_folder_access_returns_false_on_exception(monkeypatch):
         boom,
     )
     assert verify_gdrive_folder_access("some-folder-id") is False
+
+def test_verify_gdrive_folder_access_exception_path():
+    from core_lib.gdrive.gdrive_helpers import verify_gdrive_folder_access
+    mock_service = MagicMock()
+    mock_service.verify_folder_access.side_effect = Exception("Folder check network error")
+    with patch("core_lib.gdrive.gdrive_service.GDriveService", return_value=mock_service):
+        assert verify_gdrive_folder_access(folder_id="some-folder") is False

@@ -193,3 +193,116 @@ def test_get_service_handles_exception_gracefully(tmp_path):
     with patch("core_lib.gdrive.gdrive_service.get_google_service_credentials", side_effect=RuntimeError("Auth failed")):
         assert svc._get_service() is None
         assert svc.verify_folder_access() is False
+def test_operations_return_falsy_when_service_is_none(tmp_path):
+    """Kills mutants and covers guard clauses when _get_service returns None."""
+    from core_lib.gdrive.gdrive_service import GDriveService
+    svc = GDriveService(folder_id=None)
+    with patch.object(svc, "_get_service", return_value=None):
+        assert svc.verify_folder_access() is False
+        assert svc.file_exists("test.csv") is False
+        assert svc.list_files() == []
+        assert svc.upload_file(tmp_path / "any.txt") is None
+        assert svc.download_file("test.csv", tmp_path / "out.txt") is False
+
+
+def test_service_operations_handle_api_exceptions(service, mock_drive, tmp_path):
+    """Ensures robust exception handling across all CRUD operations."""
+    files_mock = mock_drive.files.return_value
+    f = tmp_path / "upload.bin"
+    f.write_text("dummy")
+
+    # file_exists exception path
+    files_mock.list.side_effect = RuntimeError("API down")
+    assert service.file_exists("upload.bin") is False
+
+    # list_files exception path
+    assert service.list_files() == []
+
+    # upload_file exception path
+    files_mock.create.side_effect = RuntimeError("Write forbidden")
+    assert service.upload_file(f) is None
+
+    # download_file exception path
+    files_mock.list.side_effect = None
+    files_mock.list().execute.return_value = {"files": [{"id": "id-123"}]}
+    files_mock.get_media.side_effect = RuntimeError("Stream broken")
+    assert service.download_file("upload.bin", tmp_path / "dest.bin") is False
+
+
+def test_upload_file_parent_folder_metadata_injection(service, mock_drive, tmp_path):
+    """Anti-mutation check for parents folder metadata."""
+    f = tmp_path / "report.pdf"
+    f.write_text("data")
+    files_mock = mock_drive.files.return_value
+    files_mock.create().execute.return_value = {"id": "created-id"}
+
+    service.upload_file(f, folder_id="custom-folder-777")
+    create_kwargs = files_mock.create.call_args[1]
+    assert create_kwargs["body"] == {
+        "name": "report.pdf",
+        "parents": ["custom-folder-777"],
+    }
+
+def test_gdrive_service_additional_methods(tmp_path):
+    from core_lib.gdrive.gdrive_service import GDriveService
+    svc = GDriveService(folder_id="f123")
+    
+    # 1. verify folder access when service is None and when target is None
+    with patch.object(svc, "_get_service", return_value=None):
+        assert svc.verify_folder_access() is False
+    
+    svc_no_folder = GDriveService(folder_id=None)
+    with patch.object(svc_no_folder, "_get_service", return_value=MagicMock()):
+        assert svc_no_folder.verify_folder_access(folder_id=None) is False
+        
+    # 2. get_latest_file_id
+    with patch.object(svc, "_get_service", return_value=None):
+        assert svc.get_latest_file_id() is None
+        
+    mock_drive = MagicMock()
+    with patch.object(svc, "_get_service", return_value=mock_drive):
+        # empty files
+        mock_drive.files().list().execute.return_value = {"files": []}
+        assert svc.get_latest_file_id() is None
+        
+        # files found
+        mock_drive.files().list().execute.return_value = {
+            "files": [{"id": "id-latest", "name": "finances-2026.db", "modifiedTime": "2026-01-01"}]
+        }
+        assert svc.get_latest_file_id() == "id-latest"
+        
+        # exception
+        mock_drive.files().list.side_effect = RuntimeError("API error")
+        assert svc.get_latest_file_id() is None
+
+    # 3. download_latest_file
+    with patch.object(svc, "get_latest_file_id", return_value=None):
+        assert svc.download_latest_file(tmp_path / "out.db") is False
+        
+    with patch.object(svc, "get_latest_file_id", return_value="id-123"):
+        with patch.object(svc, "_get_service", return_value=None):
+            assert svc.download_latest_file(tmp_path / "out.db") is False
+            
+        mock_drive = MagicMock()
+        mock_drive.files.side_effect = None
+        mock_drive.files().get_media.side_effect = RuntimeError("Media error")
+        with patch.object(svc, "_get_service", return_value=mock_drive):
+            assert svc.download_latest_file(tmp_path / "out.db") is False
+
+    # 4. get_file_modified_time
+    with patch.object(svc, "_get_service", return_value=None):
+        assert svc.get_file_modified_time("finances.db") is None
+        
+    mock_drive = MagicMock()
+    with patch.object(svc, "_get_service", return_value=mock_drive):
+        # empty
+        mock_drive.files().list().execute.return_value = {"files": []}
+        assert svc.get_file_modified_time("finances.db") is None
+        
+        # found
+        mock_drive.files().list().execute.return_value = {"files": [{"modifiedTime": "2026-11-19T20:00:00Z"}]}
+        assert svc.get_file_modified_time("finances.db") == "2026-11-19T20:00:00Z"
+        
+        # exception
+        mock_drive.files().list.side_effect = RuntimeError("Lookup failed")
+        assert svc.get_file_modified_time("finances.db") is None
