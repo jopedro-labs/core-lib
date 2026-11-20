@@ -69,56 +69,114 @@ jobs:
           CURRENT_REVISION: ${{ steps.check.outputs.current_revision }}
         run: python scripts/gemini_gdrive_advisor.py
 
-      - name: Open issue — revision changed
+      - name: Open or update issue — revision changed
         id: create_issue
         if: steps.check.outputs.result == 'revision_changed' || inputs.force_advisor == true
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const prevRev = "${{ steps.check.outputs.previous_revision || 'unknown' }}";
+            const currRev = "${{ steps.check.outputs.current_revision || 'unknown' }}";
+            const runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}";
+            const impact = "${{ steps.advisor.outputs.impact_level || 'LOW' }}";
+            const title = `📋 [${impact}] Google Drive API revision changed (${currRev})`;
+
             let issueBody = '';
             try {
               issueBody = fs.readFileSync('reports/gdrive_revision_analysis.md', 'utf8');
             } catch (err) {
-              issueBody = `Google Drive API revision changed from ${{ steps.check.outputs.previous_revision }} to ${{ steps.check.outputs.current_revision }}.\n\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+              issueBody = `Google Drive API revision changed from ${prevRev} to ${currRev}.\n\nWorkflow run: ${runUrl}`;
             }
 
-            const impact = "${{ steps.advisor.outputs.impact_level || 'LOW' }}";
-            const title = `📋 [${impact}] Google Drive API revision changed (${{ steps.check.outputs.current_revision }})`;
+            const labels = ['api-monitor', 'needs-review', `impact-${impact.toLowerCase()}`];
 
-            const issue = await github.rest.issues.create({
+            const openIssues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: title,
-              body: issueBody,
-              labels: ['api-monitor', 'needs-review', `impact-${impact.toLowerCase()}`],
+              state: 'open',
+              labels: 'api-monitor',
             });
-            core.setOutput('issue_url', issue.data.html_url);
 
-      - name: Open issue — network or parse failure
+            const existing = openIssues.data.find(
+              (item) => !item.pull_request && !item.labels.some((l) => l.name === 'bug')
+            );
+
+            if (existing) {
+              const updated = await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                title: title,
+                body: issueBody,
+                labels: labels,
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `🔄 Updated on revision check (\`${prevRev}\` ➔ \`${currRev}\`, impact: \`${impact}\`).\n🔗 Run: ${runUrl}`,
+              });
+
+              core.setOutput('issue_url', updated.data.html_url);
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: issueBody,
+                labels: labels,
+              });
+              core.setOutput('issue_url', issue.data.html_url);
+            }
+
+      - name: Open or update issue — network or parse failure
         if: steps.check.outputs.result == 'error'
         uses: actions/github-script@v7
         with:
           script: |
+            const runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}";
+            const title = '🚨 Google Drive API monitor failed (network/parse error)';
+            const body = [
+              'The automated Google Drive API monitor failed due to a **network or parse error**.',
+              '',
+              `Workflow run: ${runUrl}`,
+            ].join('\n');
+
             try {
+              const openBugs = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'api-monitor,bug',
+              });
+
+              const existingBug = openBugs.data.find((item) => !item.pull_request);
+              if (existingBug) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingBug.number,
+                  body: `🚨 Monitor failed again due to network/parse error.\n🔗 Run: ${runUrl}`,
+                });
+                return;
+              }
+
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: '🚨 Google Drive API monitor failed (network/parse error)',
-                body: [
-                  'The automated Google Drive API monitor failed due to a **network or parse error**.',
-                  '',
-                  'Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
-                ].join('\n'),
+                title: title,
+                body: body,
                 labels: ['api-monitor', 'bug'],
               });
             } catch (err) {
-              console.log('Failed to create issue with labels, retrying without labels:', err);
+              console.log('Failed to manage issue with labels, retrying without labels:', err);
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: '🚨 Google Drive API monitor failed (network/parse error)',
-                body: 'Monitor failed. Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+                title: title,
+                body: `Monitor failed. Workflow run: ${runUrl}`,
               });
             }
 
