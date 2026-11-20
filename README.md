@@ -75,10 +75,16 @@ Google Drive client using OAuth2 and the **Google Drive API v3**. Requires the `
 * **Authentication:** `google-auth >= 2.0`, `google-auth-oauthlib >= 1.0`
 * **Scopes:** `https://www.googleapis.com/auth/drive.file`
 
-**Automated API Monitoring (GDrive Update Bot):**
-* **Schedule:** Runs automatically every Thursday at 08:00 UTC (and supports manual workflow dispatch).
-* **Mechanism:** Queries Google's public Discovery Service using standard libraries (`scripts/gdrive_update_bot.py`) with built-in retry logic and linear backoff.
-* **Resilience & Alerts:** Persists revision states locally (`.github/api-revisions/gdrive-revision.json`), committing updates on success and opening targeted GitHub Issues if a breaking API revision change or network failure occurs. Can also be run manually: `python scripts/gdrive_update_bot.py`.
+**Automated API Monitoring & Gemini Revision Advisor (`gdrive_bot.yml`):**
+* **Schedule:** Runs automatically every Monday and Thursday at 20:00 UTC (and supports manual `workflow_dispatch` with optional `force_advisor` test flag).
+* **Deterministic Structural Diff First:** Compares full Discovery JSON documents (`scripts/gdrive_diff.py`), calculating exact deltas across methods, parameters, types, enums, and schemas to establish an authoritative baseline impact level (`LOW`, `MEDIUM`, `HIGH`).
+* **Gemini AI Revision Advisor:** When an API revision change is detected, the agent (`scripts/gemini_gdrive_advisor.py`) analyzes the deterministic delta against the active methods in `core_lib/gdrive/` using the official `google-genai` SDK (`gemini-2.5-flash`), enforcing anti-hallucination guardrails and authority ceiling rules.
+* **Refined GitHub Issues & Aligned Discord Alerts:** Generates an actionable, structured Markdown report directly in the GitHub Issue and sends aligned Discord notifications sharing the same severity and executive summary.
+* **State Persistence & Resilience:** Persists Discovery states and revision numbers in the `bot-state` branch with automated rebase-retry loops before issue creation. Can also be executed locally:
+  ```bash
+  python scripts/gdrive_update_bot.py
+  python scripts/gemini_gdrive_advisor.py
+  ```
 
 **Environment variables (optional — can be overridden per instance):**
 
@@ -171,7 +177,8 @@ The agent automatically executes the test suite with coverage, gathers repositor
 - Core utilities (logging, file I/O): No external dependencies.
 - Google Drive extra (`[gdrive]`): Requires Google API client libraries (`google-api-python-client`, `google-auth`, `google-auth-oauthlib`).
 - Discord extra (`[discord]`): Requires `requests`.
-- Quality Evaluation Agent: Requires `google-generativeai` (or `google.genai`), `python-dotenv`, and an active `GEMINI_API_KEY`.
+- AI Advisors & Evaluation Agents: Requires `google-genai`, `python-dotenv`, and an active `GEMINI_API_KEY`.
+
 ---
 
 ## Development

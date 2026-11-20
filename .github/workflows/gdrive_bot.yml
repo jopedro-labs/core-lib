@@ -2,8 +2,15 @@ name: Monitor Google Drive API
 
 on:
   schedule:
-    - cron: '0 8 * * 4'
+    # Executed every Monday and Thursday at 20:00 UTC
+    - cron: '0 20 * * 1,4'
   workflow_dispatch:
+    inputs:
+      force_advisor:
+        description: 'Forçar execução do Gemini Advisor mesmo sem alteração de revisão (teste/debug)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   check-api:
@@ -21,7 +28,13 @@ jobs:
           mkdir -p .github/api-revisions
           git fetch origin bot-state 2>/dev/null || true
           git show origin/bot-state:.github/api-revisions/gdrive-revision.json \
+            > .github/api-revisions/gdrive-revision.previous.json 2>/dev/null || true
+          git show origin/bot-state:.github/api-revisions/gdrive-revision.json \
             > .github/api-revisions/gdrive-revision.json 2>/dev/null || true
+          git show origin/bot-state:.github/api-revisions/drive-v3-discovery.json \
+            > .github/api-revisions/drive-v3-discovery.previous.json 2>/dev/null || true
+          git show origin/bot-state:.github/api-revisions/drive-v3-discovery.json \
+            > .github/api-revisions/drive-v3-discovery.json 2>/dev/null || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,40 +46,106 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[gdrive,discord,dev]
+          pip install google-genai
 
       - name: Run GDrive Update Bot
         id: check
         run: python scripts/gdrive_update_bot.py
         continue-on-error: true
 
+      - name: Run Gemini Revision Advisor & Deterministic Diff
+        id: advisor
+        if: steps.check.outputs.result == 'revision_changed' || inputs.force_advisor == true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          PREVIOUS_REVISION: ${{ steps.check.outputs.previous_revision }}
+          CURRENT_REVISION: ${{ steps.check.outputs.current_revision }}
+        run: python scripts/gemini_gdrive_advisor.py
+
+      - name: Persist updated state to bot-state branch (Critical Gate)
+        id: persist_state
+        if: steps.check.outputs.result == 'ok' || steps.check.outputs.result == 'revision_changed'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          TMP_DIR=$(mktemp -d)
+          cp -r .github/api-revisions/* "$TMP_DIR/" 2>/dev/null || true
+          rm -f "$TMP_DIR"/*.previous.json
+
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          SUCCESS=0
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempting to push state to bot-state (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+            if git fetch origin bot-state 2>/dev/null; then
+              git checkout -B bot-state origin/bot-state
+            else
+              git checkout --orphan bot-state
+              git rm -rf . --quiet || true
+            fi
+
+            mkdir -p .github/api-revisions
+            cp "$TMP_DIR"/* .github/api-revisions/
+
+            git add .github/api-revisions/
+            if git diff --cached --quiet; then
+              echo "No state changes to commit."
+              SUCCESS=1
+              break
+            fi
+
+            git commit -m "chore(monitor): update Google Drive API revision state [skip ci]"
+
+            if [ "${ACT}" == "true" ]; then
+              echo "Running locally via act - skipping git push."
+              SUCCESS=1
+              break
+            fi
+
+            if git push origin bot-state; then
+              echo "Successfully pushed state to bot-state."
+              SUCCESS=1
+              break
+            else
+              echo "Push failed (concurrent update). Retrying in 3s..."
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep 3
+            fi
+          done
+
+          if [ $SUCCESS -ne 1 ]; then
+            echo "Failed to persist state to bot-state after $MAX_RETRIES attempts."
+            exit 1
+          fi
+
       - name: Open issue — revision changed
-        if: steps.check.outputs.result == 'revision_changed'
+        id: create_issue
+        if: steps.check.outputs.result == 'revision_changed' || inputs.force_advisor == true
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            let issueBody = '';
             try {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: '📋 Google Drive API revision changed',
-                body: [
-                  'The automated monitor detected a **revision change** in the Google Drive API v3 discovery document.',
-                  '',
-                  'Please review the [API changelog](https://developers.google.com/drive/api/guides/v3-revisions) and verify compatibility with `core_lib.gdrive`.',
-                  '',
-                  'Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
-                ].join('\n'),
-                labels: ['api-monitor', 'needs-review'],
-              });
+              issueBody = fs.readFileSync('reports/gdrive_revision_analysis.md', 'utf8');
             } catch (err) {
-              console.log('Failed to create issue with labels, retrying without labels:', err);
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: '📋 Google Drive API revision changed',
-                body: 'Revision changed. Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-              });
+              issueBody = `Google Drive API revision changed from ${{ steps.check.outputs.previous_revision }} to ${{ steps.check.outputs.current_revision }}.\n\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             }
+
+            const impact = "${{ steps.advisor.outputs.impact_level || 'LOW' }}";
+            const title = `📋 [${impact}] Google Drive API revision changed (${{ steps.check.outputs.current_revision }})`;
+            
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: issueBody,
+              labels: ['api-monitor', 'needs-review', `impact-${impact.toLowerCase()}`],
+            });
+            core.setOutput('issue_url', issue.data.html_url);
 
       - name: Open issue — network or parse failure
         if: steps.check.outputs.result == 'error'
@@ -95,67 +174,38 @@ jobs:
               });
             }
 
-      - name: Commit updated revision state to bot-state branch
-        if: steps.check.outputs.result == 'ok' || steps.check.outputs.result == 'revision_changed'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          STATE_FILE=".github/api-revisions/gdrive-revision.json"
-          TMP_STATE=$(mktemp)
-          cp "$STATE_FILE" "$TMP_STATE"
-          rm -f "$STATE_FILE"
-
-          if git fetch origin bot-state 2>/dev/null; then
-            git checkout -B bot-state origin/bot-state
-          else
-            git checkout --orphan bot-state
-            git rm -rf . --quiet || true
-          fi
-
-          mkdir -p .github/api-revisions
-          cp "$TMP_STATE" "$STATE_FILE"
-
-          git add "$STATE_FILE"
-          git diff --cached --quiet && exit 0
-
-          git commit -m "chore(monitor): update Google Drive API revision state [skip ci]"
-
-          if [ "${ACT}" == "true" ]; then
-            echo "Running locally via act - skipping git push."
-          else
-            git push origin bot-state
-          fi
-
       - name: Send Discord Notification
         if: always()
+        continue-on-error: true
         env:
           INFRA_ALERTS_DISCORD_WEBHOOK: ${{ secrets.INFRA_ALERTS_DISCORD_WEBHOOK }}
           CHECK_RESULT: ${{ steps.check.outputs.result }}
+          IMPACT_LEVEL: ${{ steps.advisor.outputs.impact_level }}
+          SUMMARY: ${{ steps.advisor.outputs.summary }}
+          ISSUE_URL: ${{ steps.create_issue.outputs.issue_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "$INFRA_ALERTS_DISCORD_WEBHOOK" ]; then
-            echo "INFRA_ALERTS_DISCORD_WEBHOOK not set, skipping."
+            echo "INFRA_ALERTS_DISCORD_WEBHOOK not set, skipping notification."
             exit 0
           fi
 
           if [ "$CHECK_RESULT" = "ok" ]; then
-            MSG="✅ **Google Drive API Monitor**: No changes detected.\n🔗 $RUN_URL"
+            MSG="✅ **Google Drive API Monitor**: No API changes detected.\n🔗 $RUN_URL"
           elif [ "$CHECK_RESULT" = "revision_changed" ]; then
-            MSG="📋 **Google Drive API Monitor**: API revision changed!\n🔗 $RUN_URL"
+            MSG="📋 **Google Drive API Monitor** [Impact: ${IMPACT_LEVEL:-LOW}]: ${SUMMARY:-API revision changed.}\n🔗 Issue: ${ISSUE_URL:-N/A} | Run: $RUN_URL"
           else
-            MSG="🚨 **Google Drive API Monitor**: Failed (result=${CHECK_RESULT}).\n🔗 $RUN_URL"
+            MSG="🚨 **Google Drive API Monitor**: Execution failed (network/parse error).\n🔗 $RUN_URL"
           fi
 
-          PAYLOAD=$(printf '{"content":"%s"}' "$MSG")
+          PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'content': sys.argv[1]}))" "$MSG")
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST "$INFRA_ALERTS_DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-            echo "Discord notification sent (HTTP $HTTP_STATUS)."
+            echo "Discord notification sent successfully (HTTP $HTTP_STATUS)."
           else
-            echo "Discord notification failed (HTTP $HTTP_STATUS)."
-            exit 1
+            echo "Warning: Discord notification returned HTTP $HTTP_STATUS."
           fi
