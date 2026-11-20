@@ -247,6 +247,7 @@ jobs:
         env:
           INFRA_ALERTS_DISCORD_WEBHOOK: ${{ secrets.INFRA_ALERTS_DISCORD_WEBHOOK }}
           CHECK_RESULT: ${{ steps.check.outputs.result }}
+          FORCE_ADVISOR: ${{ inputs.force_advisor }}
           IMPACT_LEVEL: ${{ steps.advisor.outputs.impact_level }}
           SUMMARY: ${{ steps.advisor.outputs.summary }}
           ISSUE_URL: ${{ steps.create_issue.outputs.issue_url }}
@@ -257,12 +258,16 @@ jobs:
             exit 0
           fi
 
-          if [ "$CHECK_RESULT" = "ok" ]; then
+          if [ "$CHECK_RESULT" = "revision_changed" ] || [ "$FORCE_ADVISOR" = "true" ]; then
+            ISSUE_PART=""
+            if [ -n "$ISSUE_URL" ]; then
+              ISSUE_PART=" | 📋 Issue: $ISSUE_URL"
+            fi
+            MSG="📋 **Google Drive API Monitor**: API Changes detected | [Impact: ${IMPACT_LEVEL:-LOW}]: ${SUMMARY:-API revision changed.}$ISSUE_PART | 🔗 Run: $RUN_URL"
+          elif [ "$CHECK_RESULT" = "ok" ]; then
             MSG="✅ **Google Drive API Monitor**: No API changes detected. | 🔗 $RUN_URL"
-          elif [ "$CHECK_RESULT" = "revision_changed" ]; then
-            MSG="📋 **Google Drive API Monitor**: API Changes detected | [Impact: ${IMPACT_LEVEL:-LOW}]: ${SUMMARY:-API revision changed.} | 🔗 Run: $RUN_URL"
           else
-            MSG="🚨 **Google Drive API Monitor**: Execution failed (network/parse error). | 🔗 Run:$RUN_URL"
+            MSG="🚨 **Google Drive API Monitor**: Execution failed (network/parse error). | 🔗 Run: $RUN_URL"
           fi
 
           PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'content': sys.argv[1]}))" "$MSG")
