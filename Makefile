@@ -20,7 +20,7 @@ check: lint type test
 quality-eval-agent:
 	python3 scripts/quality_eval_agent.py
 
-run-gdrive-bot:
+gdrive-bot:
 	act workflow_dispatch \
     	-W .github/workflows/gdrive_bot.yml \
     	--secret-file .env \
