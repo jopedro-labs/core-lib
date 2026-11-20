@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,15 +11,23 @@ from scripts.gdrive_update_bot import (
     fetch_discovery_data,
     load_previous_revision,
     main,
-    save_state,
+    stage_runner_files,
     write_github_output,
 )
 
-MOCK_API_DATA = {
+MOCK_METADATA = {
     "name": "drive",
     "version": "v3",
     "revision": "20261114",
     "title": "Google Drive API",
+}
+
+MOCK_FULL_DISCOVERY = {
+    "name": "drive",
+    "version": "v3",
+    "revision": "20261114",
+    "title": "Google Drive API",
+    "resources": {},
 }
 
 
@@ -38,24 +45,26 @@ def _make_mock_response(data: dict, status: int = 200) -> MagicMock:
 
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
 def test_fetch_success(mock_urlopen: MagicMock) -> None:
-    mock_urlopen.return_value.__enter__.return_value = _make_mock_response(MOCK_API_DATA)
+    mock_urlopen.return_value.__enter__.return_value = _make_mock_response(MOCK_METADATA)
 
-    data = fetch_discovery_data()
+    metadata, discovery = fetch_discovery_data()
 
-    assert data["revision"] == "20261114"
-    assert data["version"] == "v3"
-    assert data["name"] == "drive"
-    assert data["title"] == "Google Drive API"
+    assert metadata["revision"] == "20261114"
+    assert metadata["version"] == "v3"
+    assert metadata["name"] == "drive"
+    assert metadata["title"] == "Google Drive API"
+    assert discovery["revision"] == "20261114"
 
 
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
 def test_fetch_missing_fields_use_defaults(mock_urlopen: MagicMock) -> None:
     mock_urlopen.return_value.__enter__.return_value = _make_mock_response({})
 
-    data = fetch_discovery_data()
+    metadata, discovery = fetch_discovery_data()
 
-    assert data["revision"] == "unknown"
-    assert data["name"] == "unknown"
+    assert metadata["revision"] == "unknown"
+    assert metadata["name"] == "unknown"
+    assert discovery == {}
 
 
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
@@ -68,7 +77,9 @@ def test_fetch_unexpected_http_status_raises(mock_urlopen: MagicMock) -> None:
 
 @patch("scripts.gdrive_update_bot.time.sleep")
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
-def test_fetch_retries_exact_count_then_raises(mock_urlopen: MagicMock, mock_sleep: MagicMock) -> None:
+def test_fetch_retries_exact_count_then_raises(
+    mock_urlopen: MagicMock, mock_sleep: MagicMock
+) -> None:
     mock_urlopen.side_effect = TimeoutError("timed out")
 
     with pytest.raises(TimeoutError):
@@ -81,21 +92,21 @@ def test_fetch_retries_exact_count_then_raises(mock_urlopen: MagicMock, mock_sle
 @patch("scripts.gdrive_update_bot.time.sleep")
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
 def test_fetch_succeeds_on_second_attempt(mock_urlopen: MagicMock, mock_sleep: MagicMock) -> None:
-    good_response = _make_mock_response(MOCK_API_DATA)
+    good_response = _make_mock_response(MOCK_METADATA)
     mock_urlopen.side_effect = [
         TimeoutError("first attempt fails"),
         MagicMock(__enter__=lambda s: good_response, __exit__=MagicMock(return_value=False)),
     ]
 
-    data = fetch_discovery_data()
+    metadata, discovery = fetch_discovery_data()
 
-    assert data["revision"] == "20261114"
+    assert metadata["revision"] == "20261114"
     assert mock_urlopen.call_count == 2
     mock_sleep.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
-# load_previous_revision / save_state / write_github_output
+# load_previous_revision / stage_runner_files / write_github_output
 # ---------------------------------------------------------------------------
 
 def test_load_previous_revision_no_file(tmp_path: Path) -> None:
@@ -105,7 +116,7 @@ def test_load_previous_revision_no_file(tmp_path: Path) -> None:
 
 def test_load_previous_revision_valid_file(tmp_path: Path) -> None:
     state_file = tmp_path / "gdrive-revision.json"
-    state_file.write_text(json.dumps(MOCK_API_DATA), encoding="utf-8")
+    state_file.write_text(json.dumps(MOCK_METADATA), encoding="utf-8")
 
     with patch("scripts.gdrive_update_bot.STATE_FILE", state_file):
         assert load_previous_revision() == "20261114"
@@ -127,14 +138,27 @@ def test_load_previous_revision_corrupt_file(tmp_path: Path) -> None:
         assert load_previous_revision() is None
 
 
-def test_save_state_creates_file(tmp_path: Path) -> None:
-    state_file = tmp_path / "sub" / "gdrive-revision.json"
+def test_stage_runner_files_creates_files(tmp_path: Path) -> None:
+    state_dir = tmp_path / "revisions"
+    state_file = state_dir / "gdrive-revision.json"
+    prev_state_file = state_dir / "gdrive-revision.previous.json"
+    disc_file = state_dir / "drive-v3-discovery.json"
+    prev_disc_file = state_dir / "drive-v3-discovery.previous.json"
 
-    with patch("scripts.gdrive_update_bot.STATE_FILE", state_file):
-        save_state(MOCK_API_DATA)
+    with (
+        patch("scripts.gdrive_update_bot.STATE_DIR", state_dir),
+        patch("scripts.gdrive_update_bot.STATE_FILE", state_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_STATE_FILE", prev_state_file),
+        patch("scripts.gdrive_update_bot.DISCOVERY_FILE", disc_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_DISCOVERY_FILE", prev_disc_file),
+    ):
+        stage_runner_files(MOCK_METADATA, MOCK_FULL_DISCOVERY)
 
-    saved = json.loads(state_file.read_text(encoding="utf-8"))
-    assert saved["revision"] == "20261114"
+    saved_state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved_state["revision"] == "20261114"
+
+    saved_disc = json.loads(disc_file.read_text(encoding="utf-8"))
+    assert saved_disc["revision"] == "20261114"
 
 
 def test_write_github_output_missing_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,7 +174,8 @@ def test_write_github_output_present_env(tmp_path: Path, monkeypatch: pytest.Mon
     write_github_output("result", "revision_changed")
 
     content = out_file.read_text(encoding="utf-8")
-    assert "result=revision_changed" in content
+    assert "result<<EOF_" in content
+    assert "revision_changed" in content
 
 
 # ---------------------------------------------------------------------------
@@ -164,17 +189,27 @@ def test_main_no_previous_state_creates_file(
     mock_output: MagicMock,
     tmp_path: Path,
 ) -> None:
-    mock_fetch.return_value = MOCK_API_DATA
-    state_file = tmp_path / "gdrive-revision.json"
+    mock_fetch.return_value = (MOCK_METADATA, MOCK_FULL_DISCOVERY)
+    state_dir = tmp_path / "revisions"
+    state_file = state_dir / "gdrive-revision.json"
+    disc_file = state_dir / "drive-v3-discovery.json"
+    prev_state_file = state_dir / "gdrive-revision.previous.json"
+    prev_disc_file = state_dir / "drive-v3-discovery.previous.json"
 
-    with patch("scripts.gdrive_update_bot.STATE_FILE", state_file):
+    with (
+        patch("scripts.gdrive_update_bot.STATE_DIR", state_dir),
+        patch("scripts.gdrive_update_bot.STATE_FILE", state_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_STATE_FILE", prev_state_file),
+        patch("scripts.gdrive_update_bot.DISCOVERY_FILE", disc_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_DISCOVERY_FILE", prev_disc_file),
+    ):
         main()
 
     assert state_file.exists()
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert saved["revision"] == "20261114"
     assert saved["name"] == "drive"
-    mock_output.assert_called_with("result", "ok")
+    mock_output.assert_any_call("result", "ok")
 
 
 @patch("scripts.gdrive_update_bot.write_github_output")
@@ -184,14 +219,25 @@ def test_main_same_revision_no_exit(
     mock_output: MagicMock,
     tmp_path: Path,
 ) -> None:
-    mock_fetch.return_value = MOCK_API_DATA
-    state_file = tmp_path / "gdrive-revision.json"
-    state_file.write_text(json.dumps(MOCK_API_DATA), encoding="utf-8")
+    mock_fetch.return_value = (MOCK_METADATA, MOCK_FULL_DISCOVERY)
+    state_dir = tmp_path / "revisions"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_file = state_dir / "gdrive-revision.json"
+    disc_file = state_dir / "drive-v3-discovery.json"
+    state_file.write_text(json.dumps(MOCK_METADATA), encoding="utf-8")
+    prev_state_file = state_dir / "gdrive-revision.previous.json"
+    prev_disc_file = state_dir / "drive-v3-discovery.previous.json"
 
-    with patch("scripts.gdrive_update_bot.STATE_FILE", state_file):
+    with (
+        patch("scripts.gdrive_update_bot.STATE_DIR", state_dir),
+        patch("scripts.gdrive_update_bot.STATE_FILE", state_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_STATE_FILE", prev_state_file),
+        patch("scripts.gdrive_update_bot.DISCOVERY_FILE", disc_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_DISCOVERY_FILE", prev_disc_file),
+    ):
         main()
 
-    mock_output.assert_called_with("result", "ok")
+    mock_output.assert_any_call("result", "ok")
 
 
 @patch("scripts.gdrive_update_bot.write_github_output")
@@ -201,18 +247,29 @@ def test_main_revision_changed_exits_2(
     mock_output: MagicMock,
     tmp_path: Path,
 ) -> None:
-    old_data = {**MOCK_API_DATA, "revision": "20260101"}
-    new_data = {**MOCK_API_DATA, "revision": "20261114"}
-    mock_fetch.return_value = new_data
-    state_file = tmp_path / "gdrive-revision.json"
+    old_data = {**MOCK_METADATA, "revision": "20260101"}
+    new_data = {**MOCK_METADATA, "revision": "20261114"}
+    mock_fetch.return_value = (new_data, MOCK_FULL_DISCOVERY)
+    state_dir = tmp_path / "revisions"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_file = state_dir / "gdrive-revision.json"
+    disc_file = state_dir / "drive-v3-discovery.json"
     state_file.write_text(json.dumps(old_data), encoding="utf-8")
+    prev_state_file = state_dir / "gdrive-revision.previous.json"
+    prev_disc_file = state_dir / "drive-v3-discovery.previous.json"
 
-    with patch("scripts.gdrive_update_bot.STATE_FILE", state_file):
+    with (
+        patch("scripts.gdrive_update_bot.STATE_DIR", state_dir),
+        patch("scripts.gdrive_update_bot.STATE_FILE", state_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_STATE_FILE", prev_state_file),
+        patch("scripts.gdrive_update_bot.DISCOVERY_FILE", disc_file),
+        patch("scripts.gdrive_update_bot.PREVIOUS_DISCOVERY_FILE", prev_disc_file),
+    ):
         with pytest.raises(SystemExit) as exc_info:
             main()
 
     assert exc_info.value.code == 2
-    mock_output.assert_called_with("result", "revision_changed")
+    mock_output.assert_any_call("result", "revision_changed")
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert saved["revision"] == "20261114"
 
@@ -230,12 +287,14 @@ def test_main_network_error_exits_1(
 
     assert exc_info.value.code == 1
     mock_output.assert_called_with("result", "error")
+
+
 @patch("scripts.gdrive_update_bot.time.sleep")
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
 def test_fetch_retries_exact_linear_backoff_values(mock_urlopen, mock_sleep):
     """Ensures backoff mutant (RETRIES_DELAY * attempt) is killed."""
-    from scripts.gdrive_update_bot import RETRIES_DELAY, fetch_discovery_data
     import unittest.mock
+    from scripts.gdrive_update_bot import RETRIES_DELAY, fetch_discovery_data
 
     mock_urlopen.side_effect = TimeoutError("transient timeout")
 
