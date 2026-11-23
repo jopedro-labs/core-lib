@@ -17,6 +17,7 @@ env/
 # Configuration & Secrets
 .env
 .env.*
+!.env.example
 secrets/
 
 # Testing & Coverage
