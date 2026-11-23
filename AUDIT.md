@@ -7,7 +7,7 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
 
 ## 1. Missing Local Files & Environment Setup
 
-- [ ] **Missing Root `.env` / Secret Templates (`.env.example`)**:
+- [x] **Missing Root `.env` / Secret Templates (`.env.example`)**:
   - The repository relies heavily on environment variables across `core_lib`, `scripts/`, and GitHub Actions workflows, but provides no `.env.example` or documented configuration template.
   - Missing tracked example file for configuring local runs:
     - `GDRIVE_CREDENTIALS_PATH`: Path to OAuth2 client secrets (defaults to `credentials.json`).
@@ -20,7 +20,7 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
 - [ ] **Missing OAuth2 Credential Fixtures / Mock Files**:
   - `credentials.json`: Expected locally at project root by default when calling `core_lib.gdrive.get_google_service_credentials` without arguments.
   - `token.json`: Expected locally at project root for cached tokens.
-  - `secrets/`: Gitignored directory referenced in `.gitignore` and `core_lib/gdrive/gdrive_auth.py` docstring ("saves secrets/token.json"), but not created or initialized in the repo.
+  - [X] `secrets/`: Gitignored directory referenced in `.gitignore` and `core_lib/gdrive/gdrive_auth.py` docstring ("saves secrets/token.json"), but not created or initialized in the repo.
 - [ ] **Missing State Directory Fixtures**:
   - `.github/api-revisions/`: Required by `scripts/gdrive_diff.py` and `scripts/gdrive_update_bot.py`. The files `gdrive-revision.json`, `gdrive-revision.previous.json`, `drive-v3-discovery.json`, and `drive-v3-discovery.previous.json` are expected during local diffing or simulation, but only exist dynamically on the remote `bot-state` branch.
 - [ ] **Missing Output Directory for Generated Reports**:
