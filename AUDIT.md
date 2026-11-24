@@ -13,8 +13,8 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
     - `GDRIVE_CREDENTIALS_PATH`: Path to OAuth2 client secrets (defaults to `credentials.json`).
     - `GDRIVE_TOKEN_PATH`: Path to saved OAuth2 user tokens (defaults to `token.json`).
     - `GDRIVE_DATA_FOLDER_ID`: Default Google Drive target folder ID for backups and synchronization.
-    - `GEMINI_API_KEY`: API key for `google-genai` and `google-generativeai` scripts (`scripts/gemini_gdrive_advisor.py`, `scripts/quality_eval_agent.py`).
-    - `GEMINI_MODEL`: Gemini model identifier (defaults to `gemini-2.5-flash` in `scripts/gemini_gdrive_advisor.py` and `gemini-3.1-pro-preview` in `scripts/quality_eval_agent.py`).
+    - `GEMINI_API_KEY`: API key for `google-genai` scripts (`scripts/gemini_gdrive_advisor.py`, `scripts/quality_eval_agent.py`).
+    - `GEMINI_MODEL`: Gemini model identifier (defaults to `gemini-2.5-flash` in `scripts/gemini_gdrive_advisor.py` and `scripts/quality_eval_agent.py`).
     - `INFRA_ALERTS_DISCORD_WEBHOOK`: Webhook URL for alert notifications in CI workflows.
     - `GITHUB_OUTPUT`: Path to runner step output file in CI/local execution.
 - [x] **Missing OAuth2 Credential Fixtures / Mock Files**:
@@ -25,10 +25,9 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
   - `.github/api-revisions/`: The required state files (`gdrive-revision.json`, `gdrive-revision.previous.json`, `drive-v3-discovery.json`, and `drive-v3-discovery.previous.json`) are present locally in the gitignored directory for `scripts/gdrive_diff.py` and `scripts/gdrive_update_bot.py` (originally sourced/maintained via the remote `bot-state` branch).
 - [x] **Missing Output Directory for Generated Reports**:
   - `reports/`: Ignored in `.gitignore`. Required when running `scripts/gemini_gdrive_advisor.py` (`reports/gdrive_revision_analysis.md`) and `scripts/quality_eval_agent.py` (`reports/validation_gap_report.md`).
-- [x] **Undeclared Dependencies in `pyproject.toml`**:
-  - `scripts/gemini_gdrive_advisor.py` requires `google-genai` (`from google import genai`), declared under `dev` optional-dependencies in `pyproject.toml`.
-  - `scripts/quality_eval_agent.py` requires `google-generativeai` (`import google.generativeai as genai`) and `python-dotenv` (`from dotenv import load_dotenv`), declared under `dev` optional-dependencies in `pyproject.toml`.
-  - Inconsistent SDKs used across scripts (`google-genai` in `gemini_gdrive_advisor.py` vs legacy `google-generativeai` in `quality_eval_agent.py`); `google-generativeai` is deprecated by Google and should be migrated to `google-genai` in a subsequent refactoring issue.
+- [x] **SDK Modernization in `pyproject.toml` and Evaluation Agents**:
+  - `scripts/gemini_gdrive_advisor.py` and `scripts/quality_eval_agent.py` use the official modern `google-genai` SDK (`from google import genai`) and `python-dotenv`.
+  - Deprecated `google-generativeai` package removed from dependencies and codebase.
   - `make quality-eval-agent` executes cleanly in environments installed via `make install` (`pip install -e ".[gdrive,dev]"`).
   - `pytest-cov` is executed via `scripts/quality_eval_agent.py` (`--cov=.`) and is declared under `dev` dependencies in `pyproject.toml`.
 

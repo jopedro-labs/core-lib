@@ -6,7 +6,7 @@ import pytest
 from core_lib.gdrive.gdrive_auth import get_google_service_credentials
 
 
-def test_raises_when_credentials_file_missing(tmp_path):
+def test_raises_when_credentials_file_missing(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         get_google_service_credentials(
             credentials_path=tmp_path / "missing.json",
@@ -14,7 +14,7 @@ def test_raises_when_credentials_file_missing(tmp_path):
         )
 
 
-def test_loads_existing_valid_token(tmp_path):
+def test_loads_existing_valid_token(tmp_path) -> None:
     token_path = tmp_path / "token.json"
     token_path.write_text("{}")
 
@@ -30,7 +30,7 @@ def test_loads_existing_valid_token(tmp_path):
     assert result is mock_creds
 
 
-def test_refreshes_expired_token(tmp_path):
+def test_refreshes_expired_token(tmp_path) -> None:
     token_path = tmp_path / "token.json"
     token_path.write_text("{}")
 
@@ -50,14 +50,14 @@ def test_refreshes_expired_token(tmp_path):
     assert result is mock_creds
 
 
-def test_uses_env_var_for_credentials_path(tmp_path, monkeypatch):
+def test_uses_env_var_for_credentials_path(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GDRIVE_CREDENTIALS_PATH", str(tmp_path / "missing.json"))
     monkeypatch.setenv("GDRIVE_TOKEN_PATH", str(tmp_path / "token.json"))
 
     with pytest.raises(FileNotFoundError):
         get_google_service_credentials()
 
-def test_triggers_browser_flow_when_no_token_exists(tmp_path):
+def test_triggers_browser_flow_when_no_token_exists(tmp_path) -> None:
     creds_file = tmp_path / "credentials.json"
     creds_file.write_text('{"installed": {"client_id": "123"}}')
     token_file = tmp_path / "token.json"

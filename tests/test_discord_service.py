@@ -9,17 +9,17 @@ from core_lib.discord.discord_service import (
 
 
 class TestDiscordNotifierInit:
-    def test_init_raises_when_neither_token_nor_webhook_provided(self):
+    def test_init_raises_when_neither_token_nor_webhook_provided(self) -> None:
         with pytest.raises(ValueError, match="Either 'bot_token' or 'webhook_url' must be provided"):
             DiscordNotifier()
 
-    def test_init_with_bot_token(self):
+    def test_init_with_bot_token(self) -> None:
         notifier = DiscordNotifier(bot_token="test_bot_token")
         assert notifier.bot_token == "test_bot_token"
         assert notifier.webhook_url is None
         assert notifier.timeout == 10.0
 
-    def test_init_with_webhook_url(self):
+    def test_init_with_webhook_url(self) -> None:
         url = "https://discord.com/api/webhooks/123/xyz"
         notifier = DiscordNotifier(webhook_url=url, timeout=5.0)
         assert notifier.webhook_url == url
@@ -28,7 +28,7 @@ class TestDiscordNotifierInit:
 
 
 class TestDiscordNotifierContextManager:
-    def test_context_manager_lifecycle(self):
+    def test_context_manager_lifecycle(self) -> None:
         with patch.object(requests.Session, "close") as mock_close:
             with DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz") as notifier:
                 assert isinstance(notifier, DiscordNotifier)
@@ -36,17 +36,17 @@ class TestDiscordNotifierContextManager:
 
 
 class TestDiscordNotifierSendMessage:
-    def test_send_message_raises_on_empty_content_and_embeds(self):
+    def test_send_message_raises_on_empty_content_and_embeds(self) -> None:
         notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz")
         with pytest.raises(ValueError, match="'content' or at least one embed is required"):
             notifier.send_message(content="", embeds=None)
 
-    def test_send_message_bot_token_requires_channel_id(self):
+    def test_send_message_bot_token_requires_channel_id(self) -> None:
         notifier = DiscordNotifier(bot_token="token_123")
         with pytest.raises(ValueError, match="'channel_id' is required when using a bot token"):
             notifier.send_message(content="Hello", channel_id=None)
 
-    def test_send_message_bot_token_payload_and_headers(self):
+    def test_send_message_bot_token_payload_and_headers(self) -> None:
         notifier = DiscordNotifier(bot_token="token_123")
         mock_response = MagicMock(status_code=200)
 
@@ -67,7 +67,7 @@ class TestDiscordNotifierSendMessage:
                 timeout=10.0,
             )
 
-    def test_send_message_webhook_success_codes(self):
+    def test_send_message_webhook_success_codes(self) -> None:
         url = "https://discord.com/api/webhooks/123/xyz"
         notifier = DiscordNotifier(webhook_url=url)
 
@@ -82,7 +82,7 @@ class TestDiscordNotifierSendMessage:
                     timeout=10.0,
                 )
 
-    def test_send_message_rate_limit_extracts_retry_after(self):
+    def test_send_message_rate_limit_extracts_retry_after(self) -> None:
         notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz")
         mock_response = MagicMock(status_code=429)
         mock_response.json.return_value = {"retry_after": 4.5}
@@ -91,7 +91,7 @@ class TestDiscordNotifierSendMessage:
             with pytest.raises(DiscordNotificationError, match=r"Rate limited by Discord API\. retry_after=4\.5s"):
                 notifier.send_message(content="Spamming")
 
-    def test_send_message_rate_limit_missing_retry_after(self):
+    def test_send_message_rate_limit_missing_retry_after(self) -> None:
         notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz")
         mock_response = MagicMock(status_code=429)
         mock_response.json.return_value = {}
@@ -100,7 +100,7 @@ class TestDiscordNotifierSendMessage:
             with pytest.raises(DiscordNotificationError, match=r"Rate limited by Discord API\. retry_after=unknown"):
                 notifier.send_message(content="Spamming")
 
-    def test_send_message_http_error_status(self):
+    def test_send_message_http_error_status(self) -> None:
         notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz")
         mock_response = MagicMock(status_code=401, text="Unauthorized token")
 
@@ -108,12 +108,12 @@ class TestDiscordNotifierSendMessage:
             with pytest.raises(DiscordNotificationError, match=r"HTTP 401 from Discord API: Unauthorized token"):
                 notifier.send_message(content="Invalid")
 
-    def test_send_message_network_request_exception(self):
+    def test_send_message_network_request_exception(self) -> None:
         notifier = DiscordNotifier(webhook_url="https://discord.com/api/webhooks/123/xyz")
         with patch.object(notifier.session, "post", side_effect=requests.exceptions.ConnectTimeout("Connection timed out")):
             with pytest.raises(DiscordNotificationError, match="Network error while sending Discord notification"):
                 notifier.send_message(content="Timeout")
-def test_send_message_embed_only_payload():
+def test_send_message_embed_only_payload() -> None:
     """Verifies that sending embeds without message content succeeds."""
     url = "https://discord.com/api/webhooks/123/xyz"
     notifier = DiscordNotifier(webhook_url=url)

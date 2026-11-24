@@ -14,11 +14,11 @@ from scripts.gdrive_diff import (
 )
 
 
-def test_flatten_methods_empty():
+def test_flatten_methods_empty() -> None:
     assert _flatten_methods({}) == {}
 
 
-def test_flatten_methods_nested():
+def test_flatten_methods_nested() -> None:
     resources = {
         "files": {
             "methods": {
@@ -40,7 +40,7 @@ def test_flatten_methods_nested():
     assert "files.comments.create" in flattened
 
 
-def test_compare_discovery_docs_identical():
+def test_compare_discovery_docs_identical() -> None:
     doc = {
         "resources": {
             "files": {
@@ -72,7 +72,7 @@ def test_compare_discovery_docs_identical():
     assert res["schema_property_changes"] == []
 
 
-def test_compare_discovery_docs_added_and_removed_methods():
+def test_compare_discovery_docs_added_and_removed_methods() -> None:
     prev_doc = {
         "resources": {
             "files": {
@@ -100,7 +100,7 @@ def test_compare_discovery_docs_added_and_removed_methods():
     assert res["impact_baseline"] == "HIGH"
 
 
-def test_compare_discovery_docs_parameter_changes():
+def test_compare_discovery_docs_parameter_changes() -> None:
     prev_doc = {
         "resources": {
             "files": {
@@ -142,7 +142,7 @@ def test_compare_discovery_docs_parameter_changes():
     assert res["impact_baseline"] == "HIGH"
 
 
-def test_compare_discovery_docs_parameter_type_and_enum_add():
+def test_compare_discovery_docs_parameter_type_and_enum_add() -> None:
     prev_doc = {
         "resources": {
             "files": {
@@ -180,7 +180,7 @@ def test_compare_discovery_docs_parameter_type_and_enum_add():
     assert mode_mod["breaking"] is False
 
 
-def test_compare_discovery_docs_schemas():
+def test_compare_discovery_docs_schemas() -> None:
     prev_doc = {
         "schemas": {
             "OldSchema": {},
@@ -209,7 +209,7 @@ def test_compare_discovery_docs_schemas():
     assert res["impact_baseline"] == "HIGH"
 
 
-def test_compare_discovery_docs_medium_baseline():
+def test_compare_discovery_docs_medium_baseline() -> None:
     prev_doc = {
         "schemas": {
             "ExistingSchema": {
@@ -235,7 +235,7 @@ def test_compare_discovery_docs_medium_baseline():
     assert res["schemas_added"] == ["AddedSchema"]
 
 
-def test_format_markdown_diff_empty():
+def test_format_markdown_diff_empty() -> None:
     diff = {
         "impact_baseline": "LOW",
         "methods_added": [],
@@ -249,7 +249,7 @@ def test_format_markdown_diff_empty():
     assert "No structural schema or parameter modifications detected" in md
 
 
-def test_format_markdown_diff_populated():
+def test_format_markdown_diff_populated() -> None:
     diff = {
         "impact_baseline": "HIGH",
         "methods_added": ["files.copy"],
@@ -286,7 +286,7 @@ def test_format_markdown_diff_populated():
     assert "Schema Property Modifications" in md
 
 
-def test_generate_diff_summary_missing_files(tmp_path):
+def test_generate_diff_summary_missing_files(tmp_path) -> None:
     with patch("scripts.gdrive_diff.PREVIOUS_DISCOVERY_FILE", tmp_path / "missing1.json"):
         with patch("scripts.gdrive_diff.DISCOVERY_FILE", tmp_path / "missing2.json"):
             res = generate_diff_summary()
@@ -294,7 +294,7 @@ def test_generate_diff_summary_missing_files(tmp_path):
             assert "note" in res
 
 
-def test_generate_diff_summary_corrupted_file(tmp_path):
+def test_generate_diff_summary_corrupted_file(tmp_path) -> None:
     f1 = tmp_path / "prev.json"
     f2 = tmp_path / "curr.json"
     f1.write_text("invalid json")

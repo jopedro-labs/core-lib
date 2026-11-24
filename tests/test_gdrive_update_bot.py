@@ -291,7 +291,7 @@ def test_main_network_error_exits_1(
 
 @patch("scripts.gdrive_update_bot.time.sleep")
 @patch("scripts.gdrive_update_bot.urllib.request.urlopen")
-def test_fetch_retries_exact_linear_backoff_values(mock_urlopen, mock_sleep):
+def test_fetch_retries_exact_linear_backoff_values(mock_urlopen, mock_sleep) -> None:
     """Ensures backoff mutant (RETRIES_DELAY * attempt) is killed."""
     import unittest.mock
     from scripts.gdrive_update_bot import RETRIES_DELAY, fetch_discovery_data
