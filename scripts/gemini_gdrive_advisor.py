@@ -145,22 +145,25 @@ Output your response strictly as a JSON object with this exact structure:
 
 
 def resolve_impact_level(baseline_impact: str, gemini_impact: str) -> str:
-    """Enforces strict ceiling rule on impact_level:
-    - If baseline is LOW (metadata or benign additions), impact can NEVER exceed LOW.
-    - If baseline is MEDIUM, impact can be downgraded to LOW (if unused) or stay MEDIUM, but cannot jump to HIGH.
-    - If baseline is HIGH, impact can stay HIGH or be downgraded to LOW/MEDIUM based on repository exposure.
+    """Enforces strict authority ceiling rules on impact_level:
+    - If baseline is LOW (metadata or benign additions):
+      Gemini cannot elevate to HIGH, but may upgrade to MEDIUM if an added field/flag affects core_lib/gdrive.
+    - If baseline is MEDIUM:
+      Gemini can downgrade to LOW (if methods are completely unused) or stay MEDIUM, but cannot jump to HIGH.
+    - If baseline is HIGH:
+      Gemini can stay HIGH or downgrade to MEDIUM/LOW if codebase has zero exposure.
     """
     severity_order = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
     baseline_val = severity_order.get(baseline_impact, 1)
 
     if baseline_val == 1:
-        # LOW is authoritative floor and ceiling when diff has no structural breaking changes
-        return "LOW"
+        # Baseline LOW: cannot elevate to HIGH; may be upgraded to MEDIUM by Gemini
+        return "MEDIUM" if gemini_impact == "MEDIUM" else "LOW"
     elif baseline_val == 2:
-        # Cap at MEDIUM: Gemini can keep MEDIUM or downgrade to LOW if methods are unused
+        # Baseline MEDIUM: cap at MEDIUM; Gemini can keep MEDIUM or downgrade to LOW
         return "LOW" if gemini_impact == "LOW" else "MEDIUM"
     else:
-        # HIGH baseline: can be HIGH, or downgraded to MEDIUM/LOW if codebase has zero exposure
+        # Baseline HIGH: can stay HIGH, or be downgraded to MEDIUM/LOW based on zero exposure
         return gemini_impact if gemini_impact in severity_order else "HIGH"
 
 
