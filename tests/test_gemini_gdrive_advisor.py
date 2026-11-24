@@ -18,13 +18,13 @@ from scripts.gemini_gdrive_advisor import (
 
 def test_resolve_impact_level_authority_ceiling():
     """Validates the strict authority ceiling rules:
-    - LOW baseline can NEVER be escalated (remains LOW regardless of Gemini output).
+    - LOW baseline can NEVER be escalated to HIGH, but may be upgraded to MEDIUM.
     - MEDIUM baseline cannot jump to HIGH (remains MEDIUM or downgrades to LOW).
     - HIGH baseline can stay HIGH or downgrade to MEDIUM/LOW.
     """
-    # Baseline LOW: ceiling is LOW
+    # Baseline LOW: ceiling is MEDIUM, cannot jump to HIGH
     assert resolve_impact_level("LOW", "LOW") == "LOW"
-    assert resolve_impact_level("LOW", "MEDIUM") == "LOW"
+    assert resolve_impact_level("LOW", "MEDIUM") == "MEDIUM"
     assert resolve_impact_level("LOW", "HIGH") == "LOW"
     assert resolve_impact_level("LOW", "UNKNOWN") == "LOW"
 
@@ -126,3 +126,60 @@ def test_query_gemini_success(monkeypatch):
         assert summary == "Non-breaking revision update"
         assert "No active methods affected." in md_eval
         assert "- [ ] Run tests" in md_eval
+
+
+def test_main_fallback_diff_only(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verifies main() execution under fallback conditions (no API key)."""
+    from pathlib import Path
+    from scripts.gemini_gdrive_advisor import main
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    out_file: Path = Path(str(tmp_path)) / "github_output.txt"
+    report_file: Path = Path(str(tmp_path)) / "reports" / "gdrive_revision_analysis.md"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
+
+    with (
+        patch("scripts.gemini_gdrive_advisor.REPORT_PATH", report_file),
+        patch("scripts.gemini_gdrive_advisor.generate_diff_summary", return_value={"impact_baseline": "LOW"}),
+    ):
+        main()
+
+    assert report_file.exists()
+    content: str = report_file.read_text(encoding="utf-8")
+    assert "Fallback (Deterministic Diff Only)" in content
+
+    output_text: str = out_file.read_text(encoding="utf-8")
+    assert "impact_level" in output_text
+    assert "fallback_diff_only" in output_text
+    assert "summary" in output_text
+    assert "report_file" in output_text
+
+
+def test_main_successful_enrichment(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verifies main() execution when Gemini enrichment succeeds."""
+    from pathlib import Path
+    from scripts.gemini_gdrive_advisor import main
+
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-key")
+    out_file: Path = Path(str(tmp_path)) / "github_output.txt"
+    report_file: Path = Path(str(tmp_path)) / "reports" / "gdrive_revision_analysis.md"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
+
+    mock_enrichment = ("MEDIUM", "Added optional query flag for drive list", "Analysis details")
+
+    with (
+        patch("scripts.gemini_gdrive_advisor.REPORT_PATH", report_file),
+        patch("scripts.gemini_gdrive_advisor.generate_diff_summary", return_value={"impact_baseline": "LOW"}),
+        patch("scripts.gemini_gdrive_advisor.query_gemini", return_value=mock_enrichment),
+    ):
+        main()
+
+    assert report_file.exists()
+    content: str = report_file.read_text(encoding="utf-8")
+    assert "Full AI Analysis" in content
+    assert "Impact Level**: `MEDIUM`" in report_file.read_text(encoding="utf-8")
+
+    output_text: str = out_file.read_text(encoding="utf-8")
+    assert "impact_level" in output_text
+    assert "ok" in output_text
+    assert "Added optional query flag" in output_text
