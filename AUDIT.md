@@ -17,13 +17,13 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
     - `GEMINI_MODEL`: Gemini model identifier (defaults to `gemini-2.5-flash` in `scripts/gemini_gdrive_advisor.py` and `gemini-3.1-pro-preview` in `scripts/quality_eval_agent.py`).
     - `INFRA_ALERTS_DISCORD_WEBHOOK`: Webhook URL for alert notifications in CI workflows.
     - `GITHUB_OUTPUT`: Path to runner step output file in CI/local execution.
-- [ ] **Missing OAuth2 Credential Fixtures / Mock Files**:
-  - `credentials.json`: Expected locally at project root by default when calling `core_lib.gdrive.get_google_service_credentials` without arguments.
-  - `token.json`: Expected locally at project root for cached tokens.
-  - [X] `secrets/`: Gitignored directory referenced in `.gitignore` and `core_lib/gdrive/gdrive_auth.py` docstring ("saves secrets/token.json"), but not created or initialized in the repo.
-- [ ] **Missing State Directory Fixtures**:
-  - `.github/api-revisions/`: Required by `scripts/gdrive_diff.py` and `scripts/gdrive_update_bot.py`. The files `gdrive-revision.json`, `gdrive-revision.previous.json`, `drive-v3-discovery.json`, and `drive-v3-discovery.previous.json` are expected during local diffing or simulation, but only exist dynamically on the remote `bot-state` branch.
-- [ ] **Missing Output Directory for Generated Reports**:
+- [x] **Missing OAuth2 Credential Fixtures / Mock Files**:
+  - [x] `credentials.json`: Expected locally at project root by default when calling `core_lib.gdrive.get_google_service_credentials` without arguments (configured via `GDRIVE_CREDENTIALS_PATH` inside `secrets/`).
+  - [ ] `token.json`: Expected locally at project root for cached tokens (generated in `secrets/token.json` with `https://www.googleapis.com/auth/drive` scope and configured via `GDRIVE_TOKEN_PATH`).
+  - [x] `secrets/`: Gitignored directory created locally and initialized with `credentials.json` and `token.json`.
+- [x] **Missing State Directory Fixtures**:
+  - `.github/api-revisions/`: The required state files (`gdrive-revision.json`, `gdrive-revision.previous.json`, `drive-v3-discovery.json`, and `drive-v3-discovery.previous.json`) are present locally in the gitignored directory for `scripts/gdrive_diff.py` and `scripts/gdrive_update_bot.py` (originally sourced/maintained via the remote `bot-state` branch).
+- [x] **Missing Output Directory for Generated Reports**:
   - `reports/`: Ignored in `.gitignore`. Required when running `scripts/gemini_gdrive_advisor.py` (`reports/gdrive_revision_analysis.md`) and `scripts/quality_eval_agent.py` (`reports/validation_gap_report.md`).
 - [ ] **Undeclared Dependencies in `pyproject.toml`**:
   - `scripts/gemini_gdrive_advisor.py` requires `google-genai` (`from google import genai`), which is not declared in `pyproject.toml` (neither under `dependencies` nor `optional-dependencies`).
