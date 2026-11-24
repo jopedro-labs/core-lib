@@ -73,7 +73,7 @@ Google Drive client using OAuth2 and the **Google Drive API v3**. Requires the `
 * **API Version:** Google Drive API v3 (`https://www.googleapis.com/discovery/v1/apis/drive/v3/rest`)
 * **Python Client Library:** `google-api-python-client >= 2.0`
 * **Authentication:** `google-auth >= 2.0`, `google-auth-oauthlib >= 1.0`
-* **Scopes:** `https://www.googleapis.com/auth/drive.file`
+* **Scopes:** `https://www.googleapis.com/auth/drive`
 
 **Automated API Monitoring & Gemini Revision Advisor (`gdrive_bot.yml`):**
 * **Schedule:** Runs automatically every Monday and Thursday at 20:00 UTC (and supports manual `workflow_dispatch` with optional `force_advisor` test flag).
@@ -177,7 +177,7 @@ The agent automatically executes the test suite with coverage, gathers repositor
 - Core utilities (logging, file I/O): No external dependencies.
 - Google Drive extra (`[gdrive]`): Requires Google API client libraries (`google-api-python-client`, `google-auth`, `google-auth-oauthlib`).
 - Discord extra (`[discord]`): Requires `requests`.
-- AI Advisors & Evaluation Agents: Requires `google-genai`, `python-dotenv`, and an active `GEMINI_API_KEY`.
+- AI Advisors & Evaluation Agents: Requires `google-generativeai`, `google-genai`, `python-dotenv`, `pytest-cov`, and an active `GEMINI_API_KEY`.
 
 ---
 
