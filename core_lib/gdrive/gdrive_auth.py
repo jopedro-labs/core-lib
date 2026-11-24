@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES: list[str] = ["https://www.googleapis.com/auth/drive.file"]
+SCOPES: list[str] = ["https://www.googleapis.com/auth/drive"]
 
 _DEFAULT_CREDENTIALS_PATH = "credentials.json"
 _DEFAULT_TOKEN_PATH = "token.json"

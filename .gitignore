@@ -17,6 +17,7 @@ env/
 # Configuration & Secrets
 .env
 .env.*
+!.env.example
 secrets/
 
 # Testing & Coverage
@@ -26,11 +27,11 @@ secrets/
 .coverage
 htmlcov/
 
-# Reports
+# Reports & State Artifacts
 reports/
+.github/api-revisions/
 
 # IDEs & System
 .idea/
 .vscode/
-*.DS_Store
 .DS_Store
