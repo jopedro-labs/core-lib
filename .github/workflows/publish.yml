@@ -9,25 +9,168 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+
+      - name: Extract package metadata from pyproject.toml
+        id: metadata
+        run: |
+          python - << 'EOF'
+          import os
+          import re
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          pyproject_path = Path("pyproject.toml")
+          if not pyproject_path.is_file():
+              print("Error: pyproject.toml not found at workspace root.", file=sys.stderr)
+              sys.exit(1)
+
+          with open(pyproject_path, "rb") as f:
+              data = tomllib.load(f)
+
+          project = data.get("project", {})
+          name = project.get("name", "").strip()
+          version = project.get("version", "").strip()
+
+          if not name:
+              print("Error: [project].name is missing or empty in pyproject.toml", file=sys.stderr)
+              sys.exit(1)
+          if not version:
+              print("Error: [project].version is missing or empty in pyproject.toml", file=sys.stderr)
+              sys.exit(1)
+
+          # PEP 503 / PEP 508 canonical project name
+          canonical_name = re.sub(r"[-_.]+", "-", name).lower()
+          tag = f"v{version}"
+
+          github_output = os.getenv("GITHUB_OUTPUT")
+          if github_output:
+              with open(github_output, "a", encoding="utf-8") as out:
+                  out.write(f"package_name={name}\n")
+                  out.write(f"canonical_name={canonical_name}\n")
+                  out.write(f"version={version}\n")
+                  out.write(f"tag={tag}\n")
+
+          print(f"Package: {name} (canonical: {canonical_name})")
+          print(f"Version: {version}")
+          print(f"Tag: {tag}")
+          EOF
+
+      - name: Guard against unbumped version
+        env:
+          PACKAGE_NAME: ${{ steps.metadata.outputs.package_name }}
+          CANONICAL_NAME: ${{ steps.metadata.outputs.canonical_name }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          echo "Checking Git tags and PyPI status for ${PACKAGE_NAME}==${VERSION} (${TAG})..."
+
+          # 1. Check if Git tag already exists on remote origin
+          EXISTING_TAG=$(git ls-remote --tags origin "refs/tags/${TAG}" | grep -E "refs/tags/${TAG}(\^\{\})?$" || true)
+          if [ -n "$EXISTING_TAG" ]; then
+            MSG="Release tag '${TAG}' already exists on origin. The version in pyproject.toml was not bumped."
+            echo "::error::${MSG}"
+            {
+              echo "### ❌ Release Guard Failed: Unbumped Version"
+              echo ""
+              echo "- **Git Tag Exists**: Tag \`${TAG}\` is already present on remote origin."
+              echo "- **Action Required**: Increment \`[project].version\` in \`pyproject.toml\` before publishing."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # 2. Check if package version is already published on PyPI (using PEP 503 canonical name)
+          PYPI_URL="https://pypi.org/pypi/${CANONICAL_NAME}/${VERSION}/json"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$PYPI_URL" || echo "CURL_ERROR")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            MSG="Package ${PACKAGE_NAME} version ${VERSION} is already published on PyPI. The version in pyproject.toml was not bumped."
+            echo "::error::${MSG}"
+            {
+              echo "### ❌ Release Guard Failed: Version Already on PyPI"
+              echo ""
+              echo "- **PyPI Collision**: \`${PACKAGE_NAME}==${VERSION}\` already exists on PyPI."
+              echo "- **Action Required**: Increment \`[project].version\` in \`pyproject.toml\` before publishing (PyPI disallows re-uploading identical versions)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          elif [ "$HTTP_STATUS" = "404" ]; then
+            echo "Version ${VERSION} not found on PyPI. Guard check passed."
+          else
+            MSG="Unexpected response while checking PyPI status for ${PACKAGE_NAME}==${VERSION} (HTTP status: ${HTTP_STATUS})."
+            echo "::error::${MSG}"
+            {
+              echo "### ❌ PyPI Status Check Error"
+              echo ""
+              echo "- Unexpected HTTP status code from PyPI: \`${HTTP_STATUS}\`"
+              echo "- Endpoint: \`${PYPI_URL}\`"
+              echo "- Halting workflow to avoid false positive or false negative release execution."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build
+          pip install build twine
 
-      - name: Build package (sdist and wheel)
-        run: python -m build
+      - name: Build and validate package (sdist and wheel)
+        run: |
+          python -m build
+          twine check dist/*
 
       - name: Publish package to PyPI
+        id: pypi_publish
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: PyPI publish failure diagnostics
+        if: failure() && steps.pypi_publish.outcome == 'failure'
+        env:
+          PACKAGE_NAME: ${{ steps.metadata.outputs.package_name }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          {
+            echo "### ⚠️ PyPI Publish Failure Diagnostics"
+            echo ""
+            echo "The PyPI upload step failed for \`${PACKAGE_NAME}==${VERSION}\`."
+            echo ""
+            echo "**Common Causes:**"
+            echo "1. **Duplicate Release / Unbumped Version**: PyPI strictly rejects re-uploading existing distribution filenames. Ensure \`[project].version\` in \`pyproject.toml\` has been incremented."
+            echo "2. **Trusted Publishing (OIDC) Misconfiguration**: Ensure PyPI project publisher is configured for repository \`${{ github.repository }}\` and workflow \`publish.yml\`."
+            echo "3. **Permissions / Scopes**: Ensure workflow has \`id-token: write\` permissions."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create and push release tag
+        env:
+          PACKAGE_NAME: ${{ steps.metadata.outputs.package_name }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          echo "Creating annotated tag ${TAG}..."
+          git tag -a "${TAG}" -m "Release ${TAG}"
+
+          echo "Pushing tag ${TAG} to origin..."
+          git push origin "${TAG}"
+
+          {
+            echo "### 🚀 Release Published Successfully"
+            echo ""
+            echo "- **Package**: \`${PACKAGE_NAME}\`"
+            echo "- **Version**: \`${VERSION}\`"
+            echo "- **Git Tag**: [\`${TAG}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG})"
+          } >> "$GITHUB_STEP_SUMMARY"
