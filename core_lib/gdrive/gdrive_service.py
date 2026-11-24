@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -90,9 +89,7 @@ class GDriveService:
 
         try:
             clean_folder = sanitize_gdrive_folder_id(target_folder)
-            if not clean_folder:
-                return False
-            file_metadata: dict[str, Any] = (
+            file_metadata = (
                 service.files().get(fileId=clean_folder, fields="id, mimeType").execute()
             )
             return file_metadata.get("mimeType") == "application/vnd.google-apps.folder"
@@ -172,7 +169,7 @@ class GDriveService:
                 "name": path.name,
                 "parents": [clean_folder] if clean_folder else [],
             }
-            created_file: dict[str, str] = (
+            created_file = (
                 service.files().create(body=file_metadata, media_body=media, fields="id").execute()
             )
             logger.success(f"[gdrive] '{path.name}' uploaded successfully.")
@@ -192,6 +189,7 @@ class GDriveService:
         service = self._get_service()
         if not service:
             return False
+        temp_dest: Path | None = None
         try:
             safe_name = self._escape_query_str(file_name)
             parents_clause = self._format_parents_clause(folder_id)
@@ -207,12 +205,16 @@ class GDriveService:
             request = service.files().get_media(fileId=file_id)
             dest.parent.mkdir(parents=True, exist_ok=True)
             temp_dest = dest.with_suffix(dest.suffix + f".tmp.{os.getpid()}")
-            with open(temp_dest, "wb") as fh:
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-            temp_dest.replace(dest)
+            try:
+                with open(temp_dest, "wb") as fh:
+                    downloader = MediaIoBaseDownload(fh, request)
+                    done = False
+                    while not done:
+                        _, done = downloader.next_chunk()
+                temp_dest.replace(dest)
+            finally:
+                if temp_dest.exists():
+                    temp_dest.unlink(missing_ok=True)
             logger.info(f"[gdrive] '{file_name}' downloaded to '{dest}'.")
             return True
         except Exception as e:
@@ -308,18 +310,23 @@ class GDriveService:
         if not service:
             return False
 
+        temp_dest: Path | None = None
         try:
             request = service.files().get_media(fileId=file_id)
             dest.parent.mkdir(parents=True, exist_ok=True)
             temp_dest = dest.with_suffix(dest.suffix + f".tmp.{os.getpid()}")
 
-            with open(temp_dest, "wb") as fh:
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
+            try:
+                with open(temp_dest, "wb") as fh:
+                    downloader = MediaIoBaseDownload(fh, request)
+                    done = False
+                    while not done:
+                        _, done = downloader.next_chunk()
+                temp_dest.replace(dest)
+            finally:
+                if temp_dest.exists():
+                    temp_dest.unlink(missing_ok=True)
 
-            temp_dest.replace(dest)
             logger.success(f"[gdrive] Successfully downloaded latest remote file to '{dest}'.")
             return True
         except Exception as e:
@@ -343,7 +350,7 @@ class GDriveService:
             files = response.get("files", [])
             if not files:
                 return None
-            mod_time: Any = files[0].get("modifiedTime")
+            mod_time: object = files[0].get("modifiedTime")
             return str(mod_time) if mod_time is not None else None
         except Exception as e:
             logger.error(f"[gdrive] Error getting modification time for '{file_name}': {e}")

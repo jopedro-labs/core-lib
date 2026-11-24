@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypedDict
+from typing import Protocol, TypedDict, TypeVar
+
+T_co = TypeVar("T_co", covariant=True)
 
 
 class DriveFileResource(TypedDict, total=False):
@@ -25,29 +27,29 @@ class DriveFileListResponse(TypedDict, total=False):
     files: list[DriveFileResource]
 
 
-class GoogleDriveExecutable(Protocol):
+class GoogleDriveExecutable(Protocol[T_co]):
     """Protocol for executable API requests in google-api-python-client."""
 
-    def execute(self) -> Any:
+    def execute(self) -> T_co:
         ...
 
 
 class GoogleDriveFilesResource(Protocol):
     """Protocol for Google Drive API files resource."""
 
-    def get(self, **kwargs: Any) -> GoogleDriveExecutable:
+    def get(self, **kwargs: object) -> GoogleDriveExecutable[DriveFileResource]:
         ...
 
-    def list(self, **kwargs: Any) -> GoogleDriveExecutable:
+    def list(self, **kwargs: object) -> GoogleDriveExecutable[DriveFileListResponse]:
         ...
 
-    def create(self, **kwargs: Any) -> GoogleDriveExecutable:
+    def create(self, **kwargs: object) -> GoogleDriveExecutable[DriveFileResource]:
         ...
 
-    def update(self, **kwargs: Any) -> GoogleDriveExecutable:
+    def update(self, **kwargs: object) -> GoogleDriveExecutable[DriveFileResource]:
         ...
 
-    def get_media(self, **kwargs: Any) -> GoogleDriveExecutable:
+    def get_media(self, **kwargs: object) -> GoogleDriveExecutable[object]:
         ...
 
 

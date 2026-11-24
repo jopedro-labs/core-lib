@@ -34,7 +34,7 @@ test: install
 validate-audit: install
 	$(PYTHON) scripts/validate_audit_sync.py
 
-quality-eval-agent: install
+quality-agent: install
 	@test -f .env || (echo "Error: .env file not found. Copy .env.example to .env and fill required values." >&2; exit 1)
 	$(PYTHON) scripts/quality_eval_agent.py
 

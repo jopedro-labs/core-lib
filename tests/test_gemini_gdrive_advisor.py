@@ -16,7 +16,7 @@ from scripts.gemini_gdrive_advisor import (
 )
 
 
-def test_resolve_impact_level_authority_ceiling():
+def test_resolve_impact_level_authority_ceiling() -> None:
     """Validates the strict authority ceiling rules:
     - LOW baseline can NEVER be escalated to HIGH, but may be upgraded to MEDIUM.
     - MEDIUM baseline cannot jump to HIGH (remains MEDIUM or downgrades to LOW).
@@ -40,20 +40,20 @@ def test_resolve_impact_level_authority_ceiling():
     assert resolve_impact_level("HIGH", "INVALID") == "HIGH"
 
 
-def test_scan_local_gdrive_usage():
+def test_scan_local_gdrive_usage() -> None:
     methods = scan_local_gdrive_usage()
     assert isinstance(methods, list)
     assert len(methods) > 0
     assert any("files()" in m for m in methods)
 
 
-def test_scan_local_gdrive_usage_missing_dir(tmp_path):
+def test_scan_local_gdrive_usage_missing_dir(tmp_path) -> None:
     with patch("scripts.gemini_gdrive_advisor.Path.exists", return_value=False):
         methods = scan_local_gdrive_usage()
         assert len(methods) > 0
 
 
-def test_build_markdown_report():
+def test_build_markdown_report() -> None:
     report = build_markdown_report(
         prev_rev="100",
         curr_rev="101",
@@ -71,7 +71,7 @@ def test_build_markdown_report():
     assert "Run #999" in report
 
 
-def test_build_markdown_report_fallback():
+def test_build_markdown_report_fallback() -> None:
     report = build_markdown_report(
         prev_rev="100",
         curr_rev="101",
@@ -86,7 +86,7 @@ def test_build_markdown_report_fallback():
     assert "Fallback (Deterministic Diff Only)" in report
 
 
-def test_write_github_output(tmp_path, monkeypatch):
+def test_write_github_output(tmp_path, monkeypatch) -> None:
     out_file = tmp_path / "github_output.txt"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
 
@@ -96,13 +96,13 @@ def test_write_github_output(tmp_path, monkeypatch):
     assert "success" in content
 
 
-def test_query_gemini_missing_api_key(monkeypatch):
+def test_query_gemini_missing_api_key(monkeypatch) -> None:
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(ValueError, match="GEMINI_API_KEY environment variable is not configured"):
         query_gemini({}, [], "100", "101")
 
 
-def test_query_gemini_success(monkeypatch):
+def test_query_gemini_success(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
 
     mock_client = MagicMock()

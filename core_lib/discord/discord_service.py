@@ -6,13 +6,23 @@ and Webhook URLs.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TypedDict
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 logger = logging.getLogger(__name__)
+
+
+class DiscordEmbed(TypedDict, total=False):
+    """Structural schema for Discord embed objects."""
+
+    title: str
+    description: str
+    url: str
+    color: int
+    fields: list[dict[str, str]]
 
 
 class DiscordNotificationError(Exception):
@@ -68,7 +78,7 @@ class DiscordNotifier:
         self,
         content: str | None = None,
         channel_id: str | None = None,
-        embeds: list[dict[str, Any]] | None = None,
+        embeds: list[DiscordEmbed] | None = None,
     ) -> None:
         """Send a text message or rich embeds to Discord via Bot API or Webhook.
 
@@ -88,7 +98,7 @@ class DiscordNotifier:
         if self.bot_token and not channel_id:
             raise ValueError("'channel_id' is required when using a bot token.")
 
-        payload: dict[str, Any] = {}
+        payload: dict[str, object] = {}
         if content:
             payload["content"] = content
         if embeds:

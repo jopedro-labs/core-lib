@@ -2,7 +2,7 @@ import sys
 import subprocess
 
 
-def test_gdrive_update_bot_cli_execution():
+def test_gdrive_update_bot_cli_execution() -> None:
     """Black-box functional invocation of the gdrive update bot entrypoint."""
     # When executed without credentials / internet / mock env, it handles error and exits cleanly with 1
     res = subprocess.run(
@@ -14,7 +14,7 @@ def test_gdrive_update_bot_cli_execution():
     assert res.returncode in (0, 1, 2)
 
 
-def test_subpackages_importable_independently():
+def test_subpackages_importable_independently() -> None:
     """Verify that importing core subpackages works cleanly in separate processes."""
     subpackages = [
         "core_lib.logger",

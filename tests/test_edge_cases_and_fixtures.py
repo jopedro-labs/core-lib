@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -23,7 +25,7 @@ from core_lib.logger.logger import Logger, logger
 # Logger Edge Cases
 # ---------------------------------------------------------
 
-def test_logger_print_with_custom_color_and_non_ascii(capsys):
+def test_logger_print_with_custom_color_and_non_ascii(capsys) -> None:
     test_logger = Logger()
     test_logger._colors_enabled = True
 
@@ -37,7 +39,7 @@ def test_logger_print_with_custom_color_and_non_ascii(capsys):
     assert "Teste €ção" in captured.out
 
 
-def test_logger_print_without_colors(capsys):
+def test_logger_print_without_colors(capsys) -> None:
     test_logger = Logger()
     test_logger._colors_enabled = False
     test_logger.print("Plain text", color="\033[31m")
@@ -46,7 +48,7 @@ def test_logger_print_without_colors(capsys):
     assert "Plain text" in captured.out
 
 
-def test_logger_error_with_multiline_exception(capsys):
+def test_logger_error_with_multiline_exception(capsys) -> None:
     try:
         raise ValueError("Line A\nLine B")
     except ValueError as e:
@@ -60,7 +62,7 @@ def test_logger_error_with_multiline_exception(capsys):
 # File Utils Edge Cases
 # ---------------------------------------------------------
 
-def test_load_file_content_non_utf8_binary(tmp_path):
+def test_load_file_content_non_utf8_binary(tmp_path) -> None:
     bin_file = tmp_path / "binary.dat"
     # Write invalid UTF-8 bytes
     bin_file.write_bytes(b"\x80\x81\xFF\xFE")
@@ -69,18 +71,18 @@ def test_load_file_content_non_utf8_binary(tmp_path):
     assert content == ""
 
 
-def test_load_file_content_broken_symlink(tmp_path):
+@pytest.mark.skipif(
+    not hasattr(os, "symlink") or sys.platform == "win32",
+    reason="Symlinks not supported or require elevated privileges in this environment",
+)
+def test_load_file_content_broken_symlink(tmp_path: Path) -> None:
     target = tmp_path / "non_existent.txt"
     symlink = tmp_path / "broken_link.txt"
-    try:
-        symlink.symlink_to(target)
-    except OSError:
-        pytest.skip("Symlinks not supported in this environment")
-
+    symlink.symlink_to(target)
     assert load_file_content(symlink) == ""
 
 
-def test_load_file_content_directory(tmp_path):
+def test_load_file_content_directory(tmp_path) -> None:
     sub_dir = tmp_path / "sub"
     sub_dir.mkdir()
     assert load_file_content(sub_dir) == ""
@@ -117,7 +119,7 @@ def local_http_server():
     server.server_close()
 
 
-def test_discord_loopback_success(local_http_server):
+def test_discord_loopback_success(local_http_server) -> None:
     MockDiscordHTTPHandler.status_to_return = 200
     MockDiscordHTTPHandler.response_body = b'{"success": true}'
 
@@ -125,7 +127,7 @@ def test_discord_loopback_success(local_http_server):
         notifier.send_message(content="Integration test message")
 
 
-def test_discord_loopback_rate_limit_invalid_json(local_http_server):
+def test_discord_loopback_rate_limit_invalid_json(local_http_server) -> None:
     MockDiscordHTTPHandler.status_to_return = 429
     MockDiscordHTTPHandler.response_body = b"Not JSON"
 
@@ -135,7 +137,7 @@ def test_discord_loopback_rate_limit_invalid_json(local_http_server):
         assert "Rate limited by Discord API. retry_after=unknown" in str(exc.value)
 
 
-def test_discord_loopback_rate_limit_numeric_retry_after(local_http_server):
+def test_discord_loopback_rate_limit_numeric_retry_after(local_http_server) -> None:
     MockDiscordHTTPHandler.status_to_return = 429
     MockDiscordHTTPHandler.response_body = b'{"retry_after": 2.5}'
 
@@ -145,7 +147,7 @@ def test_discord_loopback_rate_limit_numeric_retry_after(local_http_server):
         assert "retry_after=2.5s" in str(exc.value)
 
 
-def test_discord_content_length_oversized(local_http_server):
+def test_discord_content_length_oversized(local_http_server) -> None:
     # Verify large payloads (e.g. >2000 chars) are handled or rejected cleanly
     huge_content = "X" * 3000
     MockDiscordHTTPHandler.status_to_return = 400
@@ -157,7 +159,7 @@ def test_discord_content_length_oversized(local_http_server):
         assert "HTTP 400" in str(exc.value)
 
 
-def test_discord_session_retries_configured():
+def test_discord_session_retries_configured() -> None:
     notifier = DiscordNotifier(webhook_url="http://example.com/webhook", max_retries=5)
     adapter = notifier.session.adapters.get("https://")
     assert adapter is not None
@@ -168,7 +170,7 @@ def test_discord_session_retries_configured():
 # GDrive Service & Helper Edge Cases
 # ---------------------------------------------------------
 
-def test_sanitize_gdrive_folder_id_invalid_characters():
+def test_sanitize_gdrive_folder_id_invalid_characters() -> None:
     with pytest.raises(ValueError, match="empty or invalid"):
         sanitize_gdrive_folder_id("folder'id")
 
@@ -182,7 +184,7 @@ def test_sanitize_gdrive_folder_id_invalid_characters():
         sanitize_gdrive_folder_id("folder\nid")
 
 
-def test_gdrive_upload_empty_0_byte_file(tmp_path):
+def test_gdrive_upload_empty_0_byte_file(tmp_path) -> None:
     empty_file = tmp_path / "empty.dat"
     empty_file.write_bytes(b"")
 
@@ -195,7 +197,7 @@ def test_gdrive_upload_empty_0_byte_file(tmp_path):
     assert file_id == "empty_id"
 
 
-def test_gdrive_upload_overwrite_multiple_existing_remotes(tmp_path):
+def test_gdrive_upload_overwrite_multiple_existing_remotes(tmp_path) -> None:
     f = tmp_path / "report.csv"
     f.write_text("dummy")
 
@@ -214,7 +216,7 @@ def test_gdrive_upload_overwrite_multiple_existing_remotes(tmp_path):
     files_resource.update.assert_called_once()
 
 
-def test_gdrive_download_file_creates_parent_directories_and_atomic_replace(tmp_path):
+def test_gdrive_download_file_creates_parent_directories_and_atomic_replace(tmp_path) -> None:
     target_path = tmp_path / "deep" / "nested" / "dest.csv"
     svc = GDriveService()
     mock_api = MagicMock()
@@ -233,7 +235,7 @@ def test_gdrive_download_file_creates_parent_directories_and_atomic_replace(tmp_
         assert len(temp_files) == 0
 
 
-def test_gdrive_get_latest_file_id_special_characters():
+def test_gdrive_get_latest_file_id_special_characters() -> None:
     svc = GDriveService(folder_id="folder_123")
     mock_api = MagicMock()
     svc._service = mock_api
@@ -248,7 +250,7 @@ def test_gdrive_get_latest_file_id_special_characters():
     assert r"name contains 'finance\'s_%'" in call_kwargs["q"]
 
 
-def test_gdrive_get_file_modified_time_missing_field():
+def test_gdrive_get_file_modified_time_missing_field() -> None:
     svc = GDriveService()
     mock_api = MagicMock()
     svc._service = mock_api
@@ -263,7 +265,7 @@ def test_gdrive_get_file_modified_time_missing_field():
 # Auth Module Edge Cases
 # ---------------------------------------------------------
 
-def test_get_google_service_credentials_invalid_json_token(tmp_path):
+def test_get_google_service_credentials_invalid_json_token(tmp_path) -> None:
     bad_token = tmp_path / "token.json"
     bad_token.write_text("invalid json content")
 
@@ -288,7 +290,7 @@ def test_get_google_service_credentials_invalid_json_token(tmp_path):
             )
 
 
-def test_get_google_service_credentials_parent_dir_creation(tmp_path):
+def test_get_google_service_credentials_parent_dir_creation(tmp_path) -> None:
     creds_file = tmp_path / "creds.json"
     creds_file.write_text('{"installed": {}}')
     nested_token = tmp_path / "deep" / "secrets" / "token.json"

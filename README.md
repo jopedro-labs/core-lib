@@ -177,7 +177,7 @@ The agent automatically executes the test suite with coverage, gathers repositor
 - Core utilities (logging, file I/O): No external dependencies.
 - Google Drive extra (`[gdrive]`): Requires Google API client libraries (`google-api-python-client`, `google-auth`, `google-auth-oauthlib`).
 - Discord extra (`[discord]`): Requires `requests`.
-- AI Advisors & Evaluation Agents: Requires `google-generativeai`, `google-genai`, `python-dotenv`, `pytest-cov`, and an active `GEMINI_API_KEY`.
+- AI Advisors & Evaluation Agents: Requires `google-genai`, `python-dotenv`, `pytest-cov`, and an active `GEMINI_API_KEY`.
 
 ---
 

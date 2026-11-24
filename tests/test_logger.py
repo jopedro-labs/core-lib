@@ -6,63 +6,63 @@ import pytest
 from core_lib.logger import Logger, logger
 
 
-def test_info_outputs_to_stdout(capsys):
+def test_info_outputs_to_stdout(capsys) -> None:
     logger.info("hello")
     out = capsys.readouterr().out
     assert "[INFO" in out
     assert "hello" in out
 
 
-def test_success_outputs_to_stdout(capsys):
+def test_success_outputs_to_stdout(capsys) -> None:
     logger.success("done")
     out = capsys.readouterr().out
     assert "SUCCESS" in out
     assert "done" in out
 
 
-def test_warning_outputs_to_stdout(capsys):
+def test_warning_outputs_to_stdout(capsys) -> None:
     logger.warning("careful")
     out = capsys.readouterr().out
     assert "WARNING" in out
     assert "careful" in out
 
 
-def test_error_outputs_to_stderr(capsys):
+def test_error_outputs_to_stderr(capsys) -> None:
     logger.error("boom")
     err = capsys.readouterr().err
     assert "ERROR" in err
     assert "boom" in err
 
 
-def test_error_with_exception_includes_exception(capsys):
+def test_error_with_exception_includes_exception(capsys) -> None:
     logger.error("bad", exception=ValueError("oops"))
     err = capsys.readouterr().err
     assert "oops" in err
 
 
-def test_section_outputs_uppercased_title(capsys):
+def test_section_outputs_uppercased_title(capsys) -> None:
     logger.section("my section")
     out = capsys.readouterr().out
     assert "MY SECTION" in out
 
 
-def test_subsection_outputs_message(capsys):
+def test_subsection_outputs_message(capsys) -> None:
     logger.subsection("sub step")
     out = capsys.readouterr().out
     assert "sub step" in out
 
 
-def test_print_outputs_message(capsys):
+def test_print_outputs_message(capsys) -> None:
     logger.print("raw line")
     out = capsys.readouterr().out
     assert "raw line" in out
 
 
-def test_logger_singleton_is_logger_instance():
+def test_logger_singleton_is_logger_instance() -> None:
     assert isinstance(logger, Logger)
 
 
-def test_logger_respects_tty_colors(monkeypatch, capsys):
+def test_logger_respects_tty_colors(monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     tty_logger = Logger()
     assert tty_logger._colors_enabled is True
@@ -72,7 +72,7 @@ def test_logger_respects_tty_colors(monkeypatch, capsys):
     assert "\033[92m" in out
 
 
-def test_logger_strips_colors_in_non_tty(monkeypatch, capsys):
+def test_logger_strips_colors_in_non_tty(monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     headless_logger = Logger()
     assert headless_logger._colors_enabled is False
