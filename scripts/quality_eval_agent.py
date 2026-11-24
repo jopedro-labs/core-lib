@@ -19,8 +19,17 @@ load_dotenv()
 def run_pytest() -> tuple[int, str]:
     """Execute the pytest test suite via current python interpreter and capture output."""
     print("🧪 Running test suite via pytest...")
+    # Check if pytest-cov is available before adding cov flags
+    cmd = [sys.executable, "-m", "pytest"]
+    try:
+        import pytest_cov  # noqa: F401
+        cmd.extend(["--cov=.", "--cov-report=term-missing"])
+    except ImportError:
+        pass
+    cmd.append("-v")
+
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "--cov=.", "--cov-report=term-missing", "-v"],
+        cmd,
         capture_output=True,
         text=True,
     )
@@ -30,13 +39,25 @@ def run_pytest() -> tuple[int, str]:
 def gather_codebase_context() -> str:
     """Collect structure and content samples from source and test directories."""
     context_parts: list[str] = []
+    ignored_dirs = {
+        ".git",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "jopedro_core_lib.egg-info",
+        "reports",
+    }
 
     # Walk through source files
-    for root, _, files in os.walk("."):
-        if ".git" in root or "__pycache__" in root or ".venv" in root or "venv" in root:
-            continue
+    for root, dirs, files in os.walk("."):
+        dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
         for file in files:
-            if file.endswith((".py", ".yml", ".yaml", ".md")):
+            if file.endswith((".py", ".yml", ".yaml", ".md", ".toml")):
                 filepath = os.path.join(root, file)
                 try:
                     with open(filepath, encoding="utf-8") as f:

@@ -14,14 +14,14 @@ def sanitize_gdrive_folder_id(folder_id: str | None) -> str | None:
         The stripped folder ID, or None if input is None.
 
     Raises:
-        ValueError: If the folder ID is empty or contains only whitespace.
+        ValueError: If the folder ID is empty, contains whitespace, or invalid characters.
     """
     if folder_id is None:
         return None
 
     cleaned_id = folder_id.strip()
-    if not cleaned_id:
-        raise ValueError("[gdrive] Google Drive folder ID cannot be empty or invalid.")
+    if not cleaned_id or any(c in cleaned_id for c in ("'", '"', "\\", "\n", "\r")):
+        raise ValueError(f"[gdrive] Google Drive folder ID is empty or invalid: {folder_id!r}")
 
     return cleaned_id
 

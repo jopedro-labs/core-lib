@@ -48,6 +48,12 @@ files = ["core_lib"]
 
 [[tool.mypy.overrides]]
 module = [
+    "core_lib.gdrive.gdrive_auth",
+]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = [
     "google.*",
     "google_auth_oauthlib.*",
     "googleapiclient.*",

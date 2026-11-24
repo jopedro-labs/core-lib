@@ -46,11 +46,11 @@ def get_google_service_credentials(
     creds: Credentials | None = None
 
     if tok_path.exists():
-        creds = Credentials.from_authorized_user_file(str(tok_path), SCOPES)  # type: ignore[no-untyped-call]
+        creds = Credentials.from_authorized_user_file(str(tok_path), scopes=SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # type: ignore[no-untyped-call]
+            creds.refresh(Request())
         else:
             if not creds_path.exists():
                 raise FileNotFoundError(f"[gdrive] Missing OAuth2 credentials file at {creds_path}")

@@ -144,7 +144,7 @@ def test_upload_file_overwrite_branch_updates_existing(service, mock_drive, tmp_
 
     files_mock = mock_drive.files.return_value
     files_mock.list().execute.return_value = {"files": [{"id": "remote-file-id"}]}
-    # Correção: usar .return_value em vez de chamar .update() na configuração
+    # Fix: use .return_value instead of invoking .update() during setup
     files_mock.update.return_value.execute.return_value = {"id": "remote-file-id"}
 
     res = service.upload_file(f, overwrite=True)

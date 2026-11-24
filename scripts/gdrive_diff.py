@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 # Ensure workspace root is in sys.path when invoked directly
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +21,44 @@ if str(WORKSPACE_ROOT) not in sys.path:
 STATE_DIR = Path(".github/api-revisions")
 DISCOVERY_FILE = STATE_DIR / "drive-v3-discovery.json"
 PREVIOUS_DISCOVERY_FILE = STATE_DIR / "drive-v3-discovery.previous.json"
+
+
+class ParameterModification(TypedDict, total=False):
+    param: str
+    change: str
+    breaking: bool
+
+
+class MethodParameterChange(TypedDict, total=False):
+    method: str
+    added_parameters: list[str]
+    removed_parameters: list[str]
+    modified_parameters: list[ParameterModification]
+
+
+class PropertyModification(TypedDict, total=False):
+    property: str
+    change: str
+    breaking: bool
+
+
+class SchemaPropertyChange(TypedDict, total=False):
+    schema: str
+    added_properties: list[str]
+    removed_properties: list[str]
+    modified_properties: list[PropertyModification]
+
+
+class DiscoveryDiffResult(TypedDict, total=False):
+    impact_baseline: str
+    methods_added: list[str]
+    methods_removed: list[str]
+    parameter_changes: list[MethodParameterChange]
+    schemas_added: list[str]
+    schemas_removed: list[str]
+    schema_property_changes: list[SchemaPropertyChange]
+    note: str
+    error: str
 
 
 def _flatten_methods(resources: dict[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -39,7 +77,7 @@ def _flatten_methods(resources: dict[str, Any], prefix: str = "") -> dict[str, A
 
 def compare_discovery_docs(
     prev_doc: dict[str, Any], curr_doc: dict[str, Any]
-) -> dict[str, Any]:
+) -> DiscoveryDiffResult:
     """Compares two discovery documents and returns a compact structural delta."""
     prev_methods = _flatten_methods(prev_doc.get("resources", {}))
     curr_methods = _flatten_methods(curr_doc.get("resources", {}))
@@ -47,7 +85,7 @@ def compare_discovery_docs(
     methods_added: list[str] = sorted(list(set(curr_methods.keys()) - set(prev_methods.keys())))
     methods_removed: list[str] = sorted(list(set(prev_methods.keys()) - set(curr_methods.keys())))
 
-    parameter_changes: list[dict[str, Any]] = []
+    parameter_changes: list[MethodParameterChange] = []
     common_methods = set(curr_methods.keys()) & set(prev_methods.keys())
 
     for m_id in sorted(common_methods):
@@ -57,7 +95,7 @@ def compare_discovery_docs(
         added_p = set(curr_params.keys()) - set(prev_params.keys())
         removed_p = set(prev_params.keys()) - set(curr_params.keys())
 
-        modified_p: list[dict[str, Any]] = []
+        modified_p: list[ParameterModification] = []
         for p_name in set(curr_params.keys()) & set(prev_params.keys()):
             p_prev = prev_params[p_name]
             p_curr = curr_params[p_name]
@@ -116,7 +154,7 @@ def compare_discovery_docs(
     schemas_added = sorted(list(set(curr_schemas.keys()) - set(prev_schemas.keys())))
     schemas_removed = sorted(list(set(prev_schemas.keys()) - set(curr_schemas.keys())))
 
-    schema_property_changes: list[dict[str, Any]] = []
+    schema_property_changes: list[SchemaPropertyChange] = []
     for s_name in sorted(set(curr_schemas.keys()) & set(prev_schemas.keys())):
         prev_props = prev_schemas[s_name].get("properties", {})
         curr_props = curr_schemas[s_name].get("properties", {})
@@ -124,7 +162,7 @@ def compare_discovery_docs(
         added_props = set(curr_props.keys()) - set(prev_props.keys())
         removed_props = set(prev_props.keys()) - set(curr_props.keys())
 
-        modified_props: list[dict[str, Any]] = []
+        modified_props: list[PropertyModification] = []
         for prop_name in set(curr_props.keys()) & set(prev_props.keys()):
             type_prev = prev_props[prop_name].get("type")
             type_curr = curr_props[prop_name].get("type")
@@ -174,7 +212,7 @@ def compare_discovery_docs(
     }
 
 
-def generate_diff_summary() -> dict[str, Any]:
+def generate_diff_summary() -> DiscoveryDiffResult:
     """Loads documents from disk and generates the diff report."""
     if not PREVIOUS_DISCOVERY_FILE.exists() or not DISCOVERY_FILE.exists():
         return {

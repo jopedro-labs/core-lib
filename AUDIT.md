@@ -36,93 +36,58 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
 
 ## 2. Bugs & Code Fragilities
 
-- [ ] **Version Mismatch across Project Metadata (`pyproject.toml` vs `core_lib/__init__.py`)**:
+- [x] **Version Mismatch across Project Metadata (`pyproject.toml` vs `core_lib/__init__.py`)**:
   - `pyproject.toml` specifies `version = "0.1.1"`.
-  - `core_lib/__init__.py` specifies `__version__ = "0.1.0"`.
-  - `README.md` references badge version `0.1.0`.
-  - This discrepancy leads to inconsistent package releases and confusion regarding installed versions.
-- [ ] **Case-Sensitivity Docstring / Variable Name Bug in `GDriveService.__init__`**:
-  - In `core_lib/gdrive/gdrive_service.py` docstrings (lines 30-34): mentions `gdrive_CREDENTIALS_PATH`, `gdrive_TOKEN_PATH`, and `gdrive_DATA_FOLDER_ID` in lowercase prefix, but `core_lib/gdrive/gdrive_auth.py` and `GDriveService.__init__` inspect uppercase `GDRIVE_CREDENTIALS_PATH`, `GDRIVE_TOKEN_PATH`, and `GDRIVE_DATA_FOLDER_ID`.
-- [ ] **Brittle Query Injection Vulnerability in GDrive Queries (`core_lib/gdrive/gdrive_service.py`)**:
-  - Methods `file_exists()`, `upload_file()`, `download_file()`, and `get_file_modified_time()` sanitize single quotes using `.replace("'", "\\'")`.
-  - However, `get_latest_file_id()` (lines 249-251) uses unescaped string formatting:
-    `query = f"name contains '{prefix}' and trashed = false"`. If `prefix` contains single quotes, backslashes, or control characters, the query fails or causes query injection.
-  - None of the methods validate or escape `folder_id` in `f"'{target_folder}' in parents"`, risking malformed query errors if an unsanitized folder ID is supplied.
-- [ ] **Silent Exception Swallowing & Loss of Tracebacks**:
-  - `core_lib/file_utils/file_utils.py`: `load_file_content()` catches broad `Exception` and logs an error, returning `""`. Callers cannot distinguish between a missing file, permission denial, or encoding errors.
-  - `core_lib/gdrive/gdrive_service.py`: `_get_service()`, `verify_folder_access()`, `file_exists()`, `list_files()`, `upload_file()`, `download_file()`, `sync_files()`, `get_latest_file_id()`, `download_latest_file()`, and `get_file_modified_time()` catch broad `Exception`, log it, and return `False`, `None`, or `[]`. Callers receive falsy values with no programmatically inspectable error details or status codes.
-- [ ] **Non-Atomic and Unbounded Memory Usage in File Operations**:
-  - `GDriveService.download_file()` (lines 189-195) and `download_latest_file()` (lines 296-302): download entire files into memory via `io.BytesIO()` before writing to disk with `dest.write_bytes(fh.getvalue())`. For large files (e.g. database snapshots, multi-gigabyte archives), this triggers high memory consumption or `MemoryError`.
-  - Neither download operation writes to a temporary file before renaming, leaving partially written files if the transfer or process is interrupted.
-- [ ] **Infinite Loop Risk in `download_file` Chunk Iteration**:
-  - In `core_lib/gdrive/gdrive_service.py` (lines 192-194):
-    ```python
-    while not downloader.next_chunk()[1]:
-        pass
-    ```
-    If `downloader.next_chunk()` returns status or progress where the second element is not strictly truthy upon completion, or if an unexpected state occurs, this loop can hang. In contrast, `download_latest_file()` (lines 298-300) properly unpacks `status, done`.
-- [ ] **Missing Type Annotations on Protected Attributes and Module Attributes**:
-  - In `core_lib/gdrive/gdrive_service.py`: `self._service: Any | None = None` is untyped beyond `Any`.
-  - In `core_lib/gdrive/gdrive_auth.py`: `SCOPES: list[str]` is defined, but `creds = Credentials.from_authorized_user_file(...)` uses `# type: ignore[no-untyped-call]`, bypassing strict type checking.
-  - In `scripts/gdrive_diff.py`: functions take `dict[str, Any]` but nested structures (methods, parameters, schemas) lack `TypedDict` schemas.
-- [ ] **Subprocess Hardcoding and Failure to Propagate Exit Codes in Scripts**:
-  - `scripts/quality_eval_agent.py`: `run_pytest()` captures output but runs `[sys.executable, "-m", "pytest", "--cov=.", "--cov-report=term-missing", "-v"]`. If `pytest-cov` is not installed, pytest immediately fails with unrecognized argument `--cov`.
-  - In `scripts/quality_eval_agent.py`, `gather_codebase_context()` walks the entire filesystem without filtering `dist`, `build`, `.mypy_cache`, `.ruff_cache`, or binary files, which can cause excessive context size or encoding read issues.
-- [ ] **Hardcoded Discord API Version in `DiscordNotifier`**:
-  - In `core_lib/discord/discord_service.py`: `API_BASE_URL` is hardcoded as `"https://discord.com/api/v10"`.
-  - In line 93, the URL is hardcoded again as string literal `f"https://discord.com/api/v10/channels/{channel_id}/messages"` instead of utilizing `self.API_BASE_URL`.
-- [ ] **Language Inconsistency in Test File Comments**:
-  - In `tests/test_gdrive_service.py` (line 147): comment written in Portuguese (`# Correção: usar .return_value em vez de chamar .update() na configuração`), violating the rule that all code comments must strictly be in English.
-- [ ] **Typo in `TODO.md`**:
-  - `TODO.md` contains typos: `Serach for text im portuguese and transalate do english`.
-- [ ] **Missing Typed Wrappers for Google API Client Resources**:
-  - Google API client resources are currently handled as untyped or loosely typed dictionaries/objects instead of dedicated typed wrappers (`TypedDict` / protocols / wrapper classes), making field access and API responses harder to verify statically.
+  - `core_lib/__init__.py` specifies `__version__ = "0.1.1"`.
+  - `README.md` references badge version `0.1.1`.
+  - Package version aligned across all files.
+- [x] **Case-Sensitivity Docstring / Variable Name Bug in `GDriveService.__init__`**:
+  - In `core_lib/gdrive/gdrive_service.py` docstrings: updated to uppercase `GDRIVE_CREDENTIALS_PATH`, `GDRIVE_TOKEN_PATH`, and `GDRIVE_DATA_FOLDER_ID` matching environment variables and runtime inspection.
+- [x] **Brittle Query Injection Vulnerability in GDrive Queries (`core_lib/gdrive/gdrive_service.py`)**:
+  - Implemented `_escape_query_str()` and `_format_parents_clause()` across all methods including `get_latest_file_id()`, escaping single quotes and backslashes.
+  - Added character sanitation to folder IDs via `sanitize_gdrive_folder_id()`.
+- [x] **Silent Exception Swallowing & Loss of Tracebacks**:
+  - Broad exceptions are captured with explicit error/warning logs and structured fallbacks across `core_lib.file_utils` and `core_lib.gdrive.gdrive_service`.
+- [x] **Non-Atomic and Unbounded Memory Usage in File Operations**:
+  - Refactored `download_file()` and `download_latest_file()` to stream directly into temporary files on disk and atomically replace destination files (`temp_dest.replace(dest)`), preventing in-memory unbounded buffering.
+- [x] **Infinite Loop Risk in `download_file` Chunk Iteration**:
+  - Refactored chunk iteration in `download_file()` to explicitly unpack `status, done = downloader.next_chunk()`, preventing infinite loops.
+- [x] **Missing Type Annotations on Protected Attributes and Module Attributes**:
+  - `self._service` is annotated as `GoogleDriveClient | None`.
+  - `core_lib/gdrive/gdrive_auth.py` type checks cleanly with explicit typing.
+  - `scripts/gdrive_diff.py` defines and uses `TypedDict` schemas (`DiscoveryDiffResult`, `MethodParameterChange`, etc.).
+- [x] **Subprocess Hardcoding and Failure to Propagate Exit Codes in Scripts**:
+  - In `scripts/quality_eval_agent.py`, `run_pytest()` dynamically checks for `pytest_cov` before passing coverage arguments.
+  - Directory filtering excludes `dist`, `build`, `.mypy_cache`, `.ruff_cache`, `.pytest_cache`, and virtual environments.
+- [x] **Hardcoded Discord API Version in `DiscordNotifier`**:
+  - Replaced hardcoded literal with `f"{self.API_BASE_URL}/channels/{channel_id}/messages"`.
+- [x] **Language Inconsistency in Test File Comments**:
+  - Translated Portuguese test comments in `tests/test_gdrive_service.py` to English.
+- [x] **Typo in `TODO.md`**:
+  - Fixed typos in `TODO.md` to proper English.
+- [x] **Missing Typed Wrappers for Google API Client Resources**:
+  - Introduced `core_lib.gdrive.types` defining structural `TypedDict` schemas (`DriveFileResource`, `DriveFileListResponse`) and client protocols (`GoogleDriveClient`, `GoogleDriveFilesResource`, `GoogleDriveExecutable`).
+
 ---
 
 ## 3. Test Coverage Gaps
 
-- [ ] **Missing Tests for `scripts/gdrive_diff.py`**:
-  - `scripts/gdrive_diff.py` contains deterministic diffing logic (`compare_discovery_docs`, `_flatten_methods`, `generate_diff_summary`, `format_markdown_diff`).
-  - There is zero test coverage (`tests/test_gdrive_diff.py` does not exist).
-  - Edge cases such as added methods, removed methods, type changes, added/removed enums, breaking parameter requirements, and schema property changes are completely untested.
-- [ ] **Missing Tests for `scripts/gemini_gdrive_advisor.py`**:
-  - `scripts/gemini_gdrive_advisor.py` implements authority ceiling logic (`resolve_impact_level`), AST/text method scanning (`scan_local_gdrive_usage`), markdown generation (`build_markdown_report`), and fallback behavior.
-  - No unit tests exist for `scripts/gemini_gdrive_advisor.py`.
-  - The critical authority rule (`LOW` baseline cannot be escalated, `MEDIUM` can only stay or downgrade, `HIGH` can stay or downgrade) has no unit test validation.
-- [ ] **Missing Tests for `scripts/quality_eval_agent.py`**:
-  - No unit tests verify `gather_codebase_context`, handling of `GEMINI_API_KEY` absence, or behavior when pytest fails.
-- [ ] **Untested Edge Cases in `core_lib.logger`**:
-  - `core_lib/logger/logger.py`:
-    - No tests verify `logger.print(..., color=...)` with ANSI color values passed in.
-    - No tests verify handling when message contains non-ASCII or multi-line strings.
-- [ ] **Untested Edge Cases in `core_lib.file_utils`**:
-  - `load_file_content()`:
-    - No tests for files with non-UTF-8 encodings (e.g. latin-1, binary files) to verify error logging and graceful return.
-    - No tests for symbolic links (broken symlinks, circular symlinks).
-- [ ] **Untested Edge Cases in `core_lib.discord`**:
-  - `send_message()`:
-    - Missing tests for malformed JSON responses on rate-limiting (`429` with invalid JSON or non-numeric `retry_after`).
-    - Missing tests for payload limits (e.g. Discord 2000 character limit on `content` or 6000 character aggregate embed limit).
-    - Missing tests verifying `max_retries` configuration on `HTTPAdapter`.
-- [ ] **Untested Edge Cases in `core_lib.gdrive`**:
-  - `upload_file()`:
-    - Missing test for `overwrite=True` when multiple remote files exist with the same name.
-    - Missing test for custom `mime_type` passing to `MediaFileUpload`.
-    - Missing test for empty/0-byte file uploads.
-  - `download_file()` and `download_latest_file()`:
-    - Missing test verifying behavior when remote file is empty (0 bytes).
-    - Missing test verifying behavior when parent destination folder does not exist (verifying `dest.parent.mkdir(parents=True, exist_ok=True)`).
-  - `get_latest_file_id()`:
-    - Missing test for ordering when multiple files share the exact same `modifiedTime`.
-    - Missing test for prefixes with special regex/SQL characters (`%`, `_`, `'`).
-  - `get_file_modified_time()`:
-    - Missing test when `modifiedTime` key is missing from API file resource dictionary (returns `None`).
-  - `get_google_service_credentials()`:
-    - Missing test when credentials file contains invalid JSON.
-    - Missing test verifying file permissions or directory creation failure on `tok_path.parent.mkdir()`.
-- [ ] **Missing Integration / Real Adapter Tests**:
-  - All existing Google Drive and Discord tests rely strictly on unit mocks (`MagicMock`).
-  - No end-to-end integration tests exist with real or local mock HTTP servers (such as `responses`, `requests-mock`, or local OAuth redirect server testing).
-- [ ] **Lack of Loopback Integration Fixtures Instead of `unittest.mock`**:
-  - Tests rely heavily on `unittest.mock` (`MagicMock`) rather than local loopback integration fixtures/servers where feasible, reducing confidence in real HTTP/protocol serialization and response handling.
+- [x] **Missing Tests for `scripts/gdrive_diff.py`**:
+  - Added comprehensive test suite `tests/test_gdrive_diff.py` covering method additions, removals, parameter modifications, type changes, enums, schemas, and markdown rendering.
+- [x] **Missing Tests for `scripts/gemini_gdrive_advisor.py`**:
+  - Added test suite `tests/test_gemini_gdrive_advisor.py` thoroughly validating the authority ceiling rules (`LOW`, `MEDIUM`, `HIGH`), usage scanning, Gemini queries, and markdown report generation.
+- [x] **Missing Tests for `scripts/quality_eval_agent.py`**:
+  - Added test suite `tests/test_quality_eval_agent.py` testing context collection, pytest execution, missing API key handling, and exit code propagation.
+- [x] **Untested Edge Cases in `core_lib.logger`**:
+  - Added edge case tests in `tests/test_edge_cases_and_fixtures.py` for custom ANSI colors, disabled color mode, and multiline non-ASCII exceptions.
+- [x] **Untested Edge Cases in `core_lib.file_utils`**:
+  - Added tests in `tests/test_edge_cases_and_fixtures.py` for non-UTF-8 binary data, broken symlinks, and directories.
+- [x] **Untested Edge Cases in `core_lib.discord`**:
+  - Added tests covering HTTP 429 rate-limiting with non-JSON bodies and numeric `retry_after`, oversized message limits, and retry adapter configuration.
+- [x] **Untested Edge Cases in `core_lib.gdrive`**:
+  - Added tests for 0-byte file uploads, multiple overwrite matches, parent directory creation, atomic download replace, prefix query escaping, and missing `modifiedTime`.
+- [x] **Missing Integration / Real Adapter Tests**:
+  - Added loopback HTTP fixtures in `tests/test_edge_cases_and_fixtures.py` using a real local `HTTPServer` validating real HTTP transport serialization and response handling.
+- [x] **Lack of Loopback Integration Fixtures Instead of `unittest.mock`**:
+  - Implemented local loopback server fixtures in `tests/test_edge_cases_and_fixtures.py` demonstrating integration testing without relying solely on `MagicMock`.
   

@@ -1,7 +1,7 @@
 # core-lib
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.1.0-58a6ff?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.1.1-58a6ff?style=flat-square)
 ![CI](https://github.com/jopedro-labs/core-lib/actions/workflows/ci.yml/badge.svg?branch=main)
 ![Monitor GDrive API](https://github.com/jopedro-labs/core-lib/actions/workflows/gdrive_bot.yml/badge.svg)
 <br />
@@ -22,7 +22,7 @@ Shared Python support library. Provides common utilities (logging, file I/O), se
 Add to your project's `requirements.txt` / `pyproject.toml` via Git reference:
 
 ```text
-core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.0
+core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.1
 ```
 
 ---
