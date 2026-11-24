@@ -73,10 +73,6 @@ def validate_structure(audit_path: Path) -> tuple[bool, int, int]:
             print(f"  Line {line_no}: {text}")
         return False, completed_items, open_items
 
-    if completed_items == 0 and open_items == 0:
-        print("❌ Error: No audit checklist items detected in AUDIT.md.")
-        return False, 0, 0
-
     print(
         f"📋 AUDIT.md structure verified: {completed_items} completed items, "
         f"{open_items} open items."

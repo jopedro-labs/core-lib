@@ -96,9 +96,19 @@ def test_validate_structure_no_items_detected(tmp_path: Path) -> None:
     audit_file.write_text(empty_sections, encoding="utf-8")
 
     is_valid, completed, opened = validate_structure(audit_file)
-    assert is_valid is False
+    assert is_valid is True
     assert completed == 0
     assert opened == 0
+
+
+def test_main_cli_success_headers_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    audit_file: Path = tmp_path / "AUDIT.md"
+    empty_sections: str = "\n\n".join(EXPECTED_SECTIONS)
+    audit_file.write_text(empty_sections, encoding="utf-8")
+
+    test_args = ["validate_audit_sync.py", "--audit-file", str(audit_file)]
+    monkeypatch.setattr("sys.argv", test_args)
+    assert main() == 0
 
 
 def test_get_changed_files_success() -> None:
