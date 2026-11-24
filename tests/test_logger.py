@@ -3,7 +3,7 @@ from io import StringIO
 
 import pytest
 
-from core_lib.logger import Logger, logger
+from core_lib.logger import Logger, get_logger, logger
 
 
 def test_info_outputs_to_stdout(capsys) -> None:
@@ -60,6 +60,18 @@ def test_print_outputs_message(capsys) -> None:
 
 def test_logger_singleton_is_logger_instance() -> None:
     assert isinstance(logger, Logger)
+
+
+def test_get_logger_returns_singleton() -> None:
+    assert get_logger() is logger
+
+
+def test_exception_delegates_to_error(capsys) -> None:
+    logger.exception("failure occurred", exception=RuntimeError("disk full"))
+    err = capsys.readouterr().err
+    assert "ERROR" in err
+    assert "failure occurred" in err
+    assert "disk full" in err
 
 
 def test_logger_respects_tty_colors(monkeypatch, capsys) -> None:

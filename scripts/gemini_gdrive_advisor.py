@@ -22,6 +22,7 @@ if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
 from scripts.gdrive_diff import format_markdown_diff, generate_diff_summary
+from core_lib.logger import logger
 
 STATE_FILE = Path(".github/api-revisions/gdrive-revision.json")
 PREVIOUS_STATE_FILE = Path(".github/api-revisions/gdrive-revision.previous.json")
@@ -216,7 +217,7 @@ def write_github_output(key: str, value: str) -> None:
 
 def main() -> None:
     """Entry point for the Gemini GDrive Advisor."""
-    print("🔍 Computing deterministic API structural diff...")
+    logger.info("Computing deterministic API structural diff...")
     diff_data = generate_diff_summary()
     diff_markdown = format_markdown_diff(diff_data)
     baseline_impact = diff_data.get("impact_baseline", "LOW")
@@ -263,7 +264,7 @@ def main() -> None:
 
     # Try Gemini Enrichment
     try:
-        print(f"🤖 Consulting Gemini ({model_name}) via google-genai for semantic evaluation...")
+        logger.info(f"Consulting Gemini ({model_name}) via google-genai for semantic evaluation...")
         gemini_impact, gemini_summary, gemini_eval = query_gemini(
             diff_data=diff_data,
             local_methods=local_methods,
@@ -276,10 +277,10 @@ def main() -> None:
         summary = gemini_summary
         ai_evaluation = gemini_eval
         analysis_status = "ok"
-        print(f"✅ Gemini evaluation complete. Resolved impact: {impact_level} (Baseline: {baseline_impact})")
+        logger.success(f"Gemini evaluation complete. Resolved impact: {impact_level} (Baseline: {baseline_impact})")
 
     except Exception as e:
-        print(f"⚠️ Gemini enrichment unavailable or failed: {e}. Using deterministic fallback.")
+        logger.warning(f"Gemini enrichment unavailable or failed: {e}. Using deterministic fallback.")
         analysis_status = "fallback_diff_only"
         impact_level = baseline_impact
 
@@ -297,7 +298,7 @@ def main() -> None:
         model_name=model_name,
     )
     REPORT_PATH.write_text(report_content, encoding="utf-8")
-    print(f"📄 Report written to {REPORT_PATH}")
+    logger.info(f"Report written to {REPORT_PATH}")
 
     # Export to GITHUB_OUTPUT with safe delimiters
     write_github_output("impact_level", impact_level)

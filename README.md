@@ -34,15 +34,21 @@ core-lib @ git+https://github.com/jopedro-labs/core-lib.git@v0.1.1
 ANSI-colored terminal logger. Outputs to stdout (or stderr for errors) with timestamps. No file persistence.
 
 ```python
-from core_lib.logger import logger
+from core_lib.logger import get_logger, logger
 
+# Use the pre-instantiated singleton
 logger.info("Starting job")
 logger.success("Job completed")
 logger.warning("Retrying...")
 logger.error("Something failed", exception=ValueError("details"))
+logger.exception("Operation failed", exception=RuntimeError("connection dropped"))
 logger.section("Phase 1")       # bold header
 logger.subsection("Step 1.1")   # bold subheader
 logger.print("raw output")
+
+# Or obtain the singleton via get_logger()
+log = get_logger()
+log.info("Operational message")
 ```
 
 You can also instantiate `Logger` directly if you need an isolated instance:
@@ -52,6 +58,10 @@ from core_lib.logger import Logger
 
 my_logger = Logger()
 ```
+
+#### Operational Logging Convention
+* **Standardized Logging**: All operational updates, progress logs, and errors across `core_lib/` and automation scripts in `scripts/` MUST use `core_lib.logger` (`get_logger()` or `logger`) with proper log levels (`info`, `success`, `warning`, `error`, `exception`).
+* **CLI Exception**: `print()` is strictly reserved for scripts whose primary interface contract is explicit CLI stdout/piping output (e.g., `scripts/gdrive_diff.py` outputting JSON for shell pipes such as `python scripts/gdrive_diff.py | jq .`). Operational messages in CLI tools use `logger`.
 
 ### `core_lib.file_utils`
 
@@ -189,21 +199,36 @@ cd core-lib
 make install
 ```
 
-Run all checks (lint, types, tests): 
+Run all checks (lint, types, tests, and audit validation): 
 
 ```bash
 make check
 ```
 
-Individual commands:
+Individual Makefile targets:
 
-| Command                   | Description                              |
-|---------------------------|------------------------------------------|
-| `make lint`               | Lint with ruff                           |
-| `make type`               | Type check with mypy                     |
-| `make test`               | Run tests with pytest                    |
-| `make quality-eval-agent` | Run AI quality audit & test gap analysis |
-| `make check`              | Run all three in sequence                |
+| Target                   | Description                                                                 |
+|--------------------------|-----------------------------------------------------------------------------|
+| `make install`           | Create virtualenv and install editable package with all extras (`gdrive,discord,dev`) |
+| `make check`             | Run full verification gate (`lint`, `type`, `test`, `validate-audit`)        |
+| `make lint`              | Lint codebase with `ruff check core_lib`                                    |
+| `make lint-fix`          | Automatically fix lint errors with `ruff check core_lib --fix`              |
+| `make type`              | Type check `core_lib` with `mypy --strict`                                  |
+| `make test`              | Execute test suite with `pytest --tb=short`                                 |
+| `make validate-audit`    | Validate `AUDIT.md` structural integrity and checklist sync                |
+| `make quality-eval-agent`| Run autonomous Gemini AI quality audit & test gap analysis                  |
+| `make gdrive-bot`        | Run Google Drive API monitor workflow locally using `act`                   |
+| `make clean-venv`        | Remove virtual environment directory (`.venv`)                             |
+
+---
+
+## CI/CD Workflows
+
+The repository includes GitHub Actions workflows configured in `.github/workflows/`:
+
+* **`ci.yml`**: Runs on push and pull requests targeting `main`. Tests against Python matrix (`3.10`, `3.11`, `3.12`, `3.13`), enforcing linting (`ruff`), strict typing (`mypy`), pytest execution, and `validate-audit-sync --enforce-sync`.
+* **`gdrive_bot.yml`**: Scheduled (Mondays and Thursdays at 20:00 UTC) Google Drive API v3 Discovery monitoring pipeline. Detects schema updates, evaluates impact using deterministic diffs and Gemini AI, persists revision states to the `bot-state` branch, and posts issue reports and Discord notifications.
+* **`publish.yml`**: Manual release workflow triggered via `workflow_dispatch`. Validates version unbumped guards against git tags and PyPI PEP 503 endpoints, builds distributions, and publishes to PyPI via trusted publishing (OIDC).
 
 ---
 
