@@ -17,6 +17,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
+from core_lib.logger import logger
+
 load_dotenv()
 
 DEFAULT_MODEL: str = "gemini-2.5-flash"
@@ -25,7 +27,7 @@ REPORT_PATH: Path = Path("reports/validation_gap_report.md")
 
 def run_pytest() -> tuple[int, str]:
     """Execute the pytest test suite via current python interpreter and capture output."""
-    print("🧪 Running test suite via pytest...")
+    logger.info("Running test suite via pytest...")
     cmd: list[str] = [sys.executable, "-m", "pytest"]
     if importlib.util.find_spec("pytest_cov") is not None:
         cmd.extend(["--cov=core_lib", "--cov-report=term-missing"])
@@ -78,7 +80,7 @@ def evaluate_with_gemini(codebase_context: str, test_output: str) -> str:
         raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
     model_name: str = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
-    print(f"🤖 Initializing Gemini client [{model_name}] for evaluation...")
+    logger.info(f"Initializing Gemini client [{model_name}] for evaluation...")
     client: genai.Client = genai.Client(api_key=api_key)
 
     prompt: str = f"""
@@ -113,7 +115,7 @@ Provide a rigorous markdown report formatted with:
 - Prioritized Action Plan / Concrete Recommendations for missing unit/integration tests
 """
 
-    print("🤖 Analyzing codebase and test gaps with Gemini...")
+    logger.info("Analyzing codebase and test gaps with Gemini...")
     response = client.models.generate_content(
         model=model_name,
         contents=prompt,
@@ -143,7 +145,7 @@ def build_fallback_report(test_output: str, error_message: str) -> str:
 
 def main() -> None:
     """Execute the end-to-end evaluation agent workflow."""
-    print("🚀 Starting Autonomous Evaluation Agent...")
+    logger.info("Starting Autonomous Evaluation Agent...")
 
     # 1. Run tests
     exit_code, test_output = run_pytest()
@@ -156,24 +158,24 @@ def main() -> None:
     try:
         report = evaluate_with_gemini(codebase_context, test_output)
     except Exception as e:
-        print(f"⚠️ Gemini analysis unavailable or failed: {e}")
+        logger.warning(f"Gemini analysis unavailable or failed: {e}")
         report = build_fallback_report(test_output, str(e))
 
     # 4. Save report
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(report, encoding="utf-8")
-    print(f"✅ Evaluation complete. Report saved to {REPORT_PATH}")
+    logger.success(f"Evaluation complete. Report saved to {REPORT_PATH}")
 
     # Propagate pytest exit code or missing API key error
     if not os.environ.get("GEMINI_API_KEY"):
-        print("❌ Error: GEMINI_API_KEY environment variable is not set.")
+        logger.error("Error: GEMINI_API_KEY environment variable is not set.")
         sys.exit(1)
 
     if exit_code != 0:
-        print("⚠️ Test suite reported failures.")
+        logger.warning("Test suite reported failures.")
         sys.exit(exit_code)
     else:
-        print("✅ Test suite passed successfully.")
+        logger.success("Test suite passed successfully.")
         sys.exit(0)
 
 

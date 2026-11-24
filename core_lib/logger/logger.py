@@ -46,6 +46,9 @@ class Logger:
         r, end = self._c(self._FAIL), self._c(self._ENDC)
         print(f"[{r}ERROR {self._get_timestamp()}]{end} {error_msg}", file=sys.stderr)
 
+    def exception(self, message: str, exception: Exception | None = None) -> None:
+        self.error(message=message, exception=exception)
+
     def section(self, title: str) -> None:
         b, h, end = self._c(self._BOLD), self._c(self._HEADER), self._c(self._ENDC)
         print(f"[{self._get_timestamp()}] {b}{h}{title.upper()}{end}")
@@ -61,3 +64,9 @@ class Logger:
 
 
 logger: Logger = Logger()
+
+
+def get_logger() -> Logger:
+    """Return the default singleton Logger instance."""
+    return logger
+

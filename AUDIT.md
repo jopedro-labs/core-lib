@@ -10,6 +10,8 @@ This document provides a factual, read-only comprehensive audit of the `core-lib
 ---
 
 ## 2. Bugs & Code Fragilities
+- [x] **Ad-hoc logging migration**: Replaced operational `print()` calls in `scripts/` with `core_lib.logger` and added `get_logger()` and `exception()` methods.
+
 
 ---
 
