@@ -19,7 +19,16 @@ gdrive = [
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.0",
 ]
-dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10", "types-requests>=2.28"]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-requests>=2.28",
+    "google-genai>=0.1.1",
+    "google-generativeai>=0.8.0",
+    "python-dotenv>=1.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
