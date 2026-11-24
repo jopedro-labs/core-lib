@@ -46,6 +46,11 @@ strict = true
 files = ["core_lib"]
 
 [[tool.mypy.overrides]]
+# google-auth provides PEP 561 (py.typed) marker but omits type annotations on key methods:
+# - google.oauth2.credentials.Credentials.from_authorized_user_file (classmethod)
+# - google.oauth2.credentials.Credentials.refresh
+# Calling these directly in strict mode triggers [no-untyped-call].
+# This override is strictly isolated to core_lib.gdrive.gdrive_auth.
 module = [
     "core_lib.gdrive.gdrive_auth",
 ]
