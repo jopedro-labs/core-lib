@@ -39,3 +39,7 @@ jobs:
       - name: Run tests with pytest
         run: |
           pytest --tb=short
+
+      - name: Validate AUDIT structure & sync
+        run: |
+          python scripts/validate_audit_sync.py --enforce-sync

@@ -4,7 +4,6 @@ Service wrapper for Google Drive operations.
 
 from __future__ import annotations
 
-import io
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,6 +13,12 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from core_lib.gdrive.gdrive_auth import get_google_service_credentials
+from core_lib.gdrive.gdrive_helpers import sanitize_gdrive_folder_id
+from core_lib.gdrive.types import (
+    DriveFileListResponse,
+    DriveFileResource,
+    GoogleDriveClient,
+)
 from core_lib.logger import logger
 
 
@@ -30,20 +35,20 @@ class GDriveService:
 
         Args:
             credentials_path: Path to the OAuth2 credentials JSON file.
-                               Defaults to gdrive_CREDENTIALS_PATH env var or 'credentials.json'.
+                               Defaults to GDRIVE_CREDENTIALS_PATH env var or 'credentials.json'.
             token_path: Path to the token file.
-                        Defaults to gdrive_TOKEN_PATH env var or 'token.json'.
+                        Defaults to GDRIVE_TOKEN_PATH env var or 'token.json'.
             folder_id: Target Google Drive folder ID for operations.
-                       Defaults to gdrive_DATA_FOLDER_ID env var.
+                       Defaults to GDRIVE_DATA_FOLDER_ID env var.
         """
         if credentials_path and not Path(credentials_path).exists():
             raise FileNotFoundError(f"[gdrive] Missing Google credentials file: {credentials_path}")
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.folder_id: str | None = folder_id or os.getenv("GDRIVE_DATA_FOLDER_ID")
-        self._service: Any | None = None
+        self._service: GoogleDriveClient | None = None
 
-    def _get_service(self) -> Any | None:
+    def _get_service(self) -> GoogleDriveClient | None:
         if self._service is None:
             try:
                 creds = get_google_service_credentials(
@@ -59,6 +64,20 @@ class GDriveService:
                 return None
         return self._service
 
+    @staticmethod
+    def _escape_query_str(val: str) -> str:
+        """Escapes backslashes and single quotes for Google Drive search queries."""
+        return val.replace("\\", "\\\\").replace("'", "\\'")
+
+    def _format_parents_clause(self, folder_id: str | None) -> str:
+        """Validates and formats the parents query clause."""
+        target_folder = folder_id or self.folder_id
+        if not target_folder:
+            return ""
+        clean_folder = sanitize_gdrive_folder_id(target_folder)
+        safe_folder = self._escape_query_str(clean_folder or "")
+        return f" and '{safe_folder}' in parents"
+
     def verify_folder_access(self, folder_id: str | None = None) -> bool:
         """Verifies remotely if a Google Drive folder exists and is accessible."""
         service = self._get_service()
@@ -70,8 +89,11 @@ class GDriveService:
             return False
 
         try:
+            clean_folder = sanitize_gdrive_folder_id(target_folder)
+            if not clean_folder:
+                return False
             file_metadata: dict[str, Any] = (
-                service.files().get(fileId=target_folder, fields="id, mimeType").execute()
+                service.files().get(fileId=clean_folder, fields="id, mimeType").execute()
             )
             return file_metadata.get("mimeType") == "application/vnd.google-apps.folder"
         except Exception as e:
@@ -83,13 +105,11 @@ class GDriveService:
         service = self._get_service()
         if not service:
             return False
-        target_folder = folder_id or self.folder_id
-        safe_name = file_name.replace("'", "\\'")
-        query = f"name = '{safe_name}' and trashed = false"
-        if target_folder:
-            query += f" and '{target_folder}' in parents"
         try:
-            response: dict[str, list[dict[str, str]]] = (
+            safe_name = self._escape_query_str(file_name)
+            parents_clause = self._format_parents_clause(folder_id)
+            query = f"name = '{safe_name}' and trashed = false{parents_clause}"
+            response: DriveFileListResponse = (
                 service.files().list(q=query, fields="files(id)").execute()
             )
             return len(response.get("files", [])) > 0
@@ -97,17 +117,18 @@ class GDriveService:
             logger.error(f"[gdrive] Error checking file '{file_name}': {e}")
             return False
 
-    def list_files(self, folder_id: str | None = None, limit: int = 100) -> list[dict[str, str]]:
+    def list_files(self, folder_id: str | None = None, limit: int = 100) -> list[DriveFileResource]:
         """Lists files inside a specific Google Drive folder."""
         service = self._get_service()
         if not service:
             return []
-        target_folder = folder_id or self.folder_id
-        query = "trashed = false"
-        if target_folder:
-            query = f"'{target_folder}' in parents and trashed = false"
         try:
-            response: dict[str, list[dict[str, str]]] = (
+            parents_clause = self._format_parents_clause(folder_id)
+            if parents_clause:
+                query = f"{parents_clause.lstrip(' and ')} and trashed = false"
+            else:
+                query = "trashed = false"
+            response: DriveFileListResponse = (
                 service.files().list(q=query, pageSize=limit, fields="files(id, name)").execute()
             )
             return response.get("files", [])
@@ -133,12 +154,12 @@ class GDriveService:
         target_folder = folder_id or self.folder_id
         media = MediaFileUpload(str(path), mimetype=mime_type, resumable=True)
         try:
+            clean_folder = sanitize_gdrive_folder_id(target_folder) if target_folder else None
             if overwrite:
-                safe_name = path.name.replace("'", "\\'")
-                query = f"name = '{safe_name}' and trashed = false"
-                if target_folder:
-                    query += f" and '{target_folder}' in parents"
-                existing_resp: dict[str, list[dict[str, str]]] = (
+                safe_name = self._escape_query_str(path.name)
+                parents_clause = self._format_parents_clause(clean_folder)
+                query = f"name = '{safe_name}' and trashed = false{parents_clause}"
+                existing_resp: DriveFileListResponse = (
                     service.files().list(q=query, fields="files(id)").execute()
                 )
                 existing_files = existing_resp.get("files", [])
@@ -149,7 +170,7 @@ class GDriveService:
                     return file_id
             file_metadata = {
                 "name": path.name,
-                "parents": [target_folder] if target_folder else [],
+                "parents": [clean_folder] if clean_folder else [],
             }
             created_file: dict[str, str] = (
                 service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -166,32 +187,32 @@ class GDriveService:
         destination_path: str | Path,
         folder_id: str | None = None,
     ) -> bool:
-        """Downloads a file from Google Drive to a local destination path."""
+        """Downloads a file from Google Drive to a local destination path safely and atomically."""
         dest = Path(destination_path)
         service = self._get_service()
         if not service:
             return False
-        target_folder = folder_id or self.folder_id
-        safe_name = file_name.replace("'", "\\'")
-        query = f"name = '{safe_name}' and trashed = false"
-        if target_folder:
-            query += f" and '{target_folder}' in parents"
         try:
-            response: dict[str, list[dict[str, str]]] = (
+            safe_name = self._escape_query_str(file_name)
+            parents_clause = self._format_parents_clause(folder_id)
+            query = f"name = '{safe_name}' and trashed = false{parents_clause}"
+            response: DriveFileListResponse = (
                 service.files().list(q=query, fields="files(id)").execute()
             )
             files = response.get("files", [])
             if not files:
-                logger.warning(f"[gdrive] '{file_name}' not found in folder '{target_folder}'.")
+                logger.warning(f"[gdrive] '{file_name}' not found.")
                 return False
             file_id = files[0]["id"]
             request = service.files().get_media(fileId=file_id)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            with io.BytesIO() as fh:
+            temp_dest = dest.with_suffix(dest.suffix + f".tmp.{os.getpid()}")
+            with open(temp_dest, "wb") as fh:
                 downloader = MediaIoBaseDownload(fh, request)
-                while not downloader.next_chunk()[1]:
-                    pass
-                dest.write_bytes(fh.getvalue())
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+            temp_dest.replace(dest)
             logger.info(f"[gdrive] '{file_name}' downloaded to '{dest}'.")
             return True
         except Exception as e:
@@ -237,13 +258,12 @@ class GDriveService:
         if not service:
             return None
 
-        target_folder = folder_id or self.folder_id
-        query = f"name contains '{prefix}' and trashed = false"
-        if target_folder:
-            query += f" and '{target_folder}' in parents"
-
         try:
-            response = (
+            safe_prefix = self._escape_query_str(prefix)
+            parents_clause = self._format_parents_clause(folder_id)
+            query = f"name contains '{safe_prefix}' and trashed = false{parents_clause}"
+
+            response: DriveFileListResponse = (
                 service.files()
                 .list(
                     q=query,
@@ -260,7 +280,7 @@ class GDriveService:
                 return None
 
             latest_file = files[0]
-            file_name = latest_file["name"]
+            file_name = latest_file.get("name")
             mod_time = latest_file.get("modifiedTime")
             logger.info(f"[gdrive] Found latest remote file: '{file_name}' (modified: {mod_time})")
             return str(latest_file["id"])
@@ -270,7 +290,7 @@ class GDriveService:
 
     def download_latest_file(self, destination_path: str | Path, prefix: str = "finances") -> bool:
         """Downloads the most recent file matching a given prefix
-        directly to a local destination path.
+        directly to a local destination path safely and atomically.
 
         Args:
             destination_path: Local filesystem path where the file should be saved.
@@ -291,14 +311,15 @@ class GDriveService:
         try:
             request = service.files().get_media(fileId=file_id)
             dest.parent.mkdir(parents=True, exist_ok=True)
+            temp_dest = dest.with_suffix(dest.suffix + f".tmp.{os.getpid()}")
 
-            with io.BytesIO() as fh:
+            with open(temp_dest, "wb") as fh:
                 downloader = MediaIoBaseDownload(fh, request)
                 done = False
                 while not done:
                     _, done = downloader.next_chunk()
-                dest.write_bytes(fh.getvalue())
 
+            temp_dest.replace(dest)
             logger.success(f"[gdrive] Successfully downloaded latest remote file to '{dest}'.")
             return True
         except Exception as e:
@@ -310,13 +331,11 @@ class GDriveService:
         service = self._get_service()
         if not service:
             return None
-        target_folder = folder_id or self.folder_id
-        safe_name = file_name.replace("'", "\\'")
-        query = f"name = '{safe_name}' and trashed = false"
-        if target_folder:
-            query += f" and '{target_folder}' in parents"
         try:
-            response = (
+            safe_name = self._escape_query_str(file_name)
+            parents_clause = self._format_parents_clause(folder_id)
+            query = f"name = '{safe_name}' and trashed = false{parents_clause}"
+            response: DriveFileListResponse = (
                 service.files()
                 .list(q=query, fields="files(id, name, modifiedTime)", pageSize=1)
                 .execute()

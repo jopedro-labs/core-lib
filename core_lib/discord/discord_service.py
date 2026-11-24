@@ -95,7 +95,7 @@ class DiscordNotifier:
             payload["embeds"] = embeds
 
         if self.bot_token:
-            url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+            url = f"{self.API_BASE_URL}/channels/{channel_id}/messages"
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bot {self.bot_token}",
@@ -108,7 +108,10 @@ class DiscordNotifier:
             response = self.session.post(url, json=payload, headers=headers, timeout=self.timeout)
 
             if response.status_code == 429:
-                data = response.json() if response.content else {}
+                try:
+                    data = response.json() if response.content else {}
+                except Exception:
+                    data = {}
                 retry_after = data.get("retry_after", "unknown")
                 raise DiscordNotificationError(
                     f"Rate limited by Discord API. retry_after={retry_after}s"
