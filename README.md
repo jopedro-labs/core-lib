@@ -163,14 +163,11 @@ notifier.close()
 
 ### Autonomous Quality Assurance & Test Gap Evaluation Agent
 
-An internal developer utility (`scripts/quality_eval_agent.py`) powered by Gemini AI that acts as an autonomous quality assurance auditor within the repository.
+An internal, strictly local on-demand developer utility (`scripts/quality_eval_agent.py`) powered by Gemini AI (`gemini-3.8-flash` by default via `GEMINI_MODEL`) and governed by `QUALITY_AGENT.MD` as its single source of truth. It is **not** run in GitHub Actions CI workflows.
 
-**Core Validation Pillars Evaluated:**
-1. **Unit Tests:** Isolated verification and mocking via `pytest`.
-2. **Integration Tests:** Component and adapter interaction verification.
-3. **Static Code Analysis:** Type safety (`mypy`) and linting (`ruff`).
-4. **Mutation Testing Readiness:** Assessment of test suite robustness against code changes.
-5. **Black-Box Verification:** Functional and behavioral validation.
+The agent combines test coverage/gap analysis with static hygiene checks across the repository:
+* **5 Core Validation Pillars**: Unit Tests, Integration Tests, Static Code Analysis (`ruff`, `mypy`), Mutation Testing Readiness (qualitative assessment), and Black-Box Verification.
+* **9 Mandatory Code Quality & Test Audit Criteria**: Enforces explicit type annotations, avoids `typing.Any`, flags unjustified suppression comments (`# type: ignore`, `# noqa`, `@pytest.mark.skip`), checks error/edge-case handling and failure-path test depth, reviews `print()` vs. `logger` contextually (preserving intentional CLI piping), flags exposed secrets/sensitive paths, checks modularity/data contracts, and enforces repository conventions.
 
 **Execution:**
 ```bash
